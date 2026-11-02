@@ -1,3 +1,63 @@
+# Active P6 evaluation and operations (2026-11-02)
+
+The current human request resumes original P6 only. This section supersedes the
+W1–W6-only reporting instruction in AGENTS.md; the completed workflow remains
+100% within its narrower scope. P2 and P5 remain deferred. No authentication or
+model calls are authorized by this plan. Original weights and history are preserved.
+
+| Overall phase | Effort units / weight | Gate | Counted |
+|---|---|---|---|
+| P0 Local prototype | 2.5 / 8.33% | Passed | 1/1 |
+| P1 Providers | 4 / 13.33% | Historical gate passed; corporate same-provider acceptance pending, Grok off | 1/1 |
+| P2 PKG | 5 / 16.67% | Deferred | 0/1 |
+| P3 Claims | 4 / 13.33% | Passed offline | 1/1 |
+| P4 Bounds/lifecycle | 4 / 13.33% | Passed revised offline gate | 1/1 |
+| P5 Enterprise | 6.5 / 21.67% | Partial foundations; final gate deferred | 0/1 |
+| P6 Evaluation/operations | 4 / 13.33% | In progress; empirical gate required | 0/1 |
+
+Overall remains 14.5/30 = 48.33% until P6's complete gate passes.
+New P6 weights below partition its work for tracking, not the overall gate.
+
+| P6 track phase | Weight | Finite acceptance gate | State |
+|---|---:|---|---|
+| E1 Protocol | 20% | Versioned public fixtures, matched arms, independent rubric, fixed criteria | Passed offline: 1/1 |
+| E2 Harness | 25% | Offline preflight, bounded execution, immutable evidence, blind packets | Passed offline: 1/1 |
+| E3 Observability/faults | 20% | Local report, proposed SLOs, timeout/cancel/invalid/missing-usage/cleanup tests | Passed offline: 1/1 |
+| E4 Operations/delivery | 15% | Playbook, full quality gate, reviewable PR | To do: 0/1 |
+| E5 Empirical acceptance | 20% | Authorized roster/run, independent blind grades, honest comparative result | Pending authorization: 0/1 |
+
+Task steps (equal 25%): review, implement, verify, document. Review, implementation, verification and documentation complete (4/4); PR delivery pending. Final empirical completion requires real evidence, not mocks.
+
+PKG navigation used map_repo on clean 2b2648f. It reports TypeScript/JavaScript
+call graph coverage as heuristic. New evaluation modules reuse existing APIs without modifying pre-existing production
+symbols. No pre-change blast radius is claimed for new symbols. file_insights on
+Engine at clean 2b2648f found 44 bound constructor/type callers, 34 create callers
+and 29 run callers; four untested reachable symbols, no truncation. TypeScript
+unresolved calls are not tracked. Existing Engine/core/adapters/validation remain
+unchanged, so no existing-symbol blast-radius edit gate was triggered. No credentials or private saved runs are fixtures.
+
+
+Offline acceptance evidence (2026-11-02): `npm run check` passed TypeScript,
+528 Node tests and 33 Python tests, with both inference flags explicitly zero.
+The first sandboxed gate stalled and was stopped; the successful full gate ran
+outside the outer sandbox for existing confinement/loopback tests. Application
+protections were unchanged. Final log: `/tmp/koinous-p6-check-final.log`.
+`runs/p6-offline-final` completed 10/10 development cells, 32 synthetic calls,
+with source/config manifest, original events, blind packets and standalone HTML.
+No authentication, model calls or human grades occurred. Browser visual inspection
+of the local HTML was blocked by the browser's file-URL policy; HTML structure,
+escaping, self-containment and output counters are tested, not a claimed visual QA.
+Existing saved live response directories were not read or modified.
+
+E5 remains pending: exact eligible model IDs, account/workspace confirmation,
+reviewed clean-source preflight, explicit 32-development/64-heldout attempt approval,
+and two independent human reviewers. Four heldout tasks yield descriptive pilot
+results only; negative/inconclusive results are valid. No empirical superiority,
+accepted SLO or original P6 completion is claimed. See `evaluation/PROTOCOL.md`
+and `OPERATIONS.md` for the finite gates, stop policy and interpretation limits.
+
+---
+
 # Active product roadmap — idea discussion workflow (2026-11-01)
 
 The user has refocused delivery on: idea → research/analysis → peer review →
