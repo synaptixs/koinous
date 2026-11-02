@@ -1,5 +1,33 @@
 # Koinous team demo
 
+## One-command live demo
+
+Install Node.js 22.16 or newer with npm, extract the bundle, then run in its folder:
+
+```sh
+npm run demo:live
+```
+
+This command installs pinned dependencies using `npm ci` (internet required;
+replaces node_modules on each launch), reuses existing subscription logins, opens
+any missing ChatGPT/Claude subscription login flow, and verifies the login method
+before starting the existing live UI. Complete the provider browser sign-ins yourself.
+No API-key fallback, credentials copied into the project, or model prompts during
+setup. Login status confirms the method, not quota or model access. Grok stays off.
+
+Open the localhost URL printed in the terminal. Select models available to your
+subscriptions, enter an idea, keep three rounds, and click Start discussion. Only
+that click sends model prompts and uses subscription quota. Stop with Ctrl+C to
+end the server's inference opt-in. Startup errors stop without automatic retries.
+Existing manual setup commands below remain available for troubleshooting.
+`npm run demo:live -- --help` prints offline instructions without installation/login.
+
+The one-command setup is offline-tested with fake installation/authentication/server
+steps; no new live login or model run was made while implementing it. The underlying
+Codex/Claude discussion path has passed a bounded live UI run with six responses,
+complete peer coverage, a nonblocking length warning and an attributed recommendation.
+Other operating systems and new-account browser login flows remain unverified.
+
 ## Fastest setup: no credentials and no model calls
 
 Use Node.js 22.16 or newer (Node 22.10 is the package minimum). Extract the source
@@ -40,7 +68,9 @@ Two previously failing real discussions were replayed offline using their exact
 saved responses: both now have complete peer coverage and two usable final positions.
 Separate replay reports retain warnings and disagreements; the original files were
 unchanged. This verifies the handling of those saved failures, not a new live run.
-A reliable live demo is not yet certified; the mock walkthrough remains available.
+A later bounded live UI discussion completed all six responses with full peer
+coverage and a nonblocking warning. This demonstrates that workflow, not universal
+reliability for every idea. The mock walkthrough remains available.
 
 ## Five-minute walkthrough
 
@@ -122,12 +152,10 @@ Pinned login command contracts were checked with local CLI help and official
 The setup uses ChatGPT-only Codex configuration and Claude's explicit `--claudeai`
 flag; inherited API keys and custom endpoint/cloud routing are excluded from the
 provider environment. Fresh-clone authentication status confirmed both existing
-subscription logins. A subsequent six-response live run exposed duplicate Claude
-peer-review/revision entries; its final outcome was insufficient. The strengthened
-unique-peer instructions have passed offline regression tests, but have not yet
-been validated in a new live run. Use the mock walkthrough for a reliable guided
-POC; separately authorize a bounded live validation before promising a clean live
-demonstration. Browser login flows for a new account remain unverified.
+subscription logins. The latest bounded live UI discussion completed six responses,
+complete peer review coverage and two usable final positions, preserving a length
+warning and disagreements. The new one-command wrapper is verified offline only;
+new-account browser login flows remain unverified.
 Platform-specific native CLI packages
 must be present after npm ci. macOS was the development test platform.
 

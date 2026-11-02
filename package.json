@@ -16,7 +16,8 @@
     "start:secure": "node --env-file-if-exists=.env --experimental-strip-types src/secure-server.ts",
     "demo": "node --experimental-strip-types scripts/demo.ts",
     "setup": "node --experimental-strip-types scripts/setup.ts",
-    "start:real": "node --experimental-strip-types scripts/start-real.ts"
+    "start:real": "node --experimental-strip-types scripts/start-real.ts",
+    "demo:live": "node --experimental-strip-types scripts/demo-live.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.316",

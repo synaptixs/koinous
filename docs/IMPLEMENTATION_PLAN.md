@@ -14,14 +14,15 @@ W1–W6 uses new explicit product planning weights (not time estimates).
 | W3 Peer review and revision | 20% | Each peer reviewed, revisions attributed, missing coverage explicit, offline tests | Passed offline |
 | W4 Final recommendation | 20% | Sources, review coverage, recommendation, dissent and next actions in UI/report | Passed offline |
 | W5 Offline acceptance | 10% | Full quality gate and workflow regressions, inference disabled | Passed offline |
-| W6 Authorized live acceptance | 10% | One complete usable Codex/Claude discussion with honest warnings and recommendation | Reopened: latest live runs failed length handling; new policy needs offline verification then separately authorized live acceptance |
+| W6 Authorized live acceptance | 10% | One complete usable Codex/Claude discussion with honest warnings and recommendation | Passed: one bounded Codex/Claude subscription discussion, six usable responses, complete peer coverage, nonblocking prose warning; split outcome retained |
 
-Current overall and workflow track: 90%. W6 is reopened after the latest live failures;
-this corrects the misleading prior 100% readiness presentation. Weights and denominator
-are unchanged. Earlier passes remain historical evidence, not acceptance of this policy.
-Current task: length warnings — review, implement, verify, document/deliver
-(equal weights), 4/4 complete (100%). Inference disabled, Grok off. Enterprise hardening
-and PKG remain deferred and unestimated.
+Current overall and workflow track: 100% for the scoped W1–W6 gates. W6 passed
+on 2026-11-02 after the warning-policy correction; this is one successful bounded
+run, not proof of reliability for every idea or a production-readiness claim.
+Weights are unchanged; the final 10% moved only after verifying the live artifacts.
+Current task: one-command live-demo bundle — review, implement, verify, document
+(equal weights), 4/4 complete. Inference disabled, Grok off. Enterprise hardening and PKG
+remain deferred and unestimated.
 
 Review: existing three-round orchestration already provides independent views,
 frozen peer exchanges, final JSON positions, conservative agreement, explicit
@@ -42,6 +43,58 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### One-command live demo (2026-11-02)
+
+New npm run demo:live bootstraps pinned dependencies with npm ci, reuses or obtains
+local subscription login for Codex/Claude, then delegates to the existing guarded
+start:real launcher. No model prompt is sent until the user starts a UI discussion.
+Grok is disabled, ambient API keys/routing are stripped, and the parent never enables
+inference. The child launcher rechecks both subscription methods before enablement.
+Commands use shell-free argv, bounded auth/install timeouts and captured status size;
+Ctrl+C/termination forwards shutdown to the current child. Help performs no actions.
+Installation replaces node_modules each launch, deliberately avoiding stale native
+SDK packages from another architecture. Node 22.16+ and internet are prerequisites.
+
+PKG-first investigation identified preparePersonalDiscussion, authCommand and
+subscriptionReady. These existing symbols were read and reused unchanged. New
+launcher helpers have no pre-change blast radius; no exhaustive graph claim is made.
+Ten offline tests cover existing/missing/API logins, rechecks, install/login/status/
+server failures, cancellation, argument/Node preflight, sanitized subprocess env,
+bounded output and timeouts. Real provider login/model calls remain unrun this task.
+Full quality gate passed: TypeScript, 502 Node tests and 33 Python tests.
+The bundle includes START-HERE.txt and the pinned source; credentials, private runs,
+node_modules and VM artifacts are excluded.
+
+### Live acceptance of prose warnings (2026-11-02)
+
+PR #5 was already merged at 291a4d22fe5adfeab690ddd8b5a34ac5638bce1f. Review found
+no blocking issues; source/tests matched the offline-tested commit (TypeScript,
+492 Node and 33 Python tests). One user-authorized PKG-search discussion used
+subscription-only Codex gpt-6-astra and Claude claude-opus-5-5, with no API-key fallback.
+Three rounds, six application calls, 90-second call deadlines and a five-minute
+cancellation watchdog; no retries or additional sessions. No external research or
+PKG retrieval was requested: the subject was PKG search design with stated assumptions.
+
+Session 8ba1d31c-c7c2-4584-baf2-8156091d8c3c completed with six original responses,
+four full prior-round peer exchanges, unique peer entries, complete declared
+review/revision coverage and two usable final positions. Claude's round-two reason
+was 524 characters against the 400 threshold; the warning remained visible without
+blocking coverage or the report. Final revision reasons were 170/155 characters.
+Both provider proposals, next actions and unresolved disagreements are in the report.
+Directions differ (Codex revise, Claude pilot), so the assessment is split rather
+than invented consensus. The final recommendation is the explicit procedural
+fallback to compare proposals and define success criteria; it is not a synthesized
+joint technical endorsement.
+
+Usage: 158,684 input and 6,007 output tokens. Claude's reported estimate is $0.145037,
+not a subscription invoice; all three Codex costs remain unknown. Final cleanup
+confirmed both inference flags disabled, Grok excluded and no listening server.
+Original texts were checked against the report. Evidence: ignored
+runs/length-warning-live/{verification,report-checks,acceptance-summary,inference-state}.json
+and runs/8ba1d31c-c7c2-4584-baf2-8156091d8c3c/report.md. These checks verify this
+single discussion; broader live research, new-account login UX and production
+reliability are outside this acceptance. No further live run is authorized.
 
 ### Prose length warnings (2026-11-02)
 
