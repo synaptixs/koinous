@@ -17,7 +17,7 @@ W1–W6 uses new explicit product planning weights (not time estimates).
 | W6 Authorized live acceptance | 10% | User-authorized two/three-provider acceptance of revised workflow | Passed: bounded Codex/Claude idea-only subscription discussion; three-provider attempt failed on Grok timeout; broader live research unverified |
 
 Current overall and workflow track: 100% for the previously passed W1–W6 scope.
-Current task: personal subscription setup — review, implement, verify, document/deliver
+Current task: unique peer instructions — review, implement, verify, document/deliver
 (equal weights), 4/4 complete (100%); offline verified, prepared for PR delivery.
 W6 retains its prior two-provider pass; nine-response Grok acceptance is unpassed.
 The new smoke localized its wait to inference; backend/routing cause remains unknown.
@@ -42,6 +42,38 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### Unique peer declarations and demo readiness (2026-11-01)
+
+Peer-review and revision prompts now enumerate the exact available peer IDs and
+required array length for that round. Each provider gets one object, aggregating
+its points within the existing 400-character reason limit; mixed decisions are
+unresolved, with remaining dissent in openQuestions/disagreements. A final checklist
+requires unique IDs and exact coverage. Original responses, parsers, validation
+limits, storage and failure outcomes are unchanged. No deduplication or retry occurs.
+Prompt instructions reduce ambiguity; they cannot guarantee model compliance.
+
+Measured pre-change PKG impact for composePrompt: one bound caller Engine.run,
+two touched symbols including the module; README and this plan referenced. Results
+were not truncated; TypeScript unresolved calls are not tracked. Regression gaps
+reported prepareDemo and preparePersonalDiscussion uncovered among five impacted
+symbols. Direct demo/subscription-setup tests exercise those helpers and passed in
+the full gate; graph coverage is not exhaustive.
+
+Verification: TypeScript, 487 Node tests and 33 Python tests passed. Nine new tests
+cover round-two/three contracts with zero/one/two available peers, independent-round
+privacy, unchanged duplicate rejection with preserved originals in session/report/
+events, six-call bounds, insufficient outcomes, and 400/401-character boundaries.
+Evidence: ignored runs/unique-peer-instructions/check.log. No authentication or model
+calls; Grok off, inference disabled, enterprise hardening and PKG deferred.
+
+Demo readiness: mock walkthrough and bundled saved sample are ready. Fresh-clone
+subscription status previously confirmed both providers. The latest authorized
+real discussion d60f2632-5245-485d-84d4-8a8f618b654f returned six responses, but
+Claude's duplicate review/revision entries left only one valid final position and
+an insufficient outcome. This prompt change is offline verified only. A successful
+live rerun remains unverified and requires separate authorization; prior W6 scope
+is not evidence that this specific regression is fixed in live model behavior.
 
 ### Personal subscription setup (2026-11-01)
 
