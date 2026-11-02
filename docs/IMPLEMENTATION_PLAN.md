@@ -23,10 +23,10 @@ New P6 weights below partition its work for tracking, not the overall gate.
 | E1 Protocol | 20% | Versioned public fixtures, matched arms, independent rubric, fixed criteria | Passed offline: 1/1 |
 | E2 Harness | 25% | Offline preflight, bounded execution, immutable evidence, blind packets | Passed offline: 1/1 |
 | E3 Observability/faults | 20% | Local report, proposed SLOs, timeout/cancel/invalid/missing-usage/cleanup tests | Passed offline: 1/1 |
-| E4 Operations/delivery | 15% | Playbook, full quality gate, reviewable PR | To do: 0/1 |
+| E4 Operations/delivery | 15% | Playbook, full quality gate, reviewable PR | Passed offline: 1/1 |
 | E5 Empirical acceptance | 20% | Authorized roster/run, independent blind grades, honest comparative result | Pending authorization: 0/1 |
 
-Task steps (equal 25%): review, implement, verify, document. Review, implementation, verification and documentation complete (4/4); PR delivery pending. Final empirical completion requires real evidence, not mocks.
+Task steps (equal 25%): review, implement, verify, document. Review, implementation, verification and documentation complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), not merged. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 PKG navigation used map_repo on clean 2b2648f. It reports TypeScript/JavaScript
 call graph coverage as heuristic. New evaluation modules reuse existing APIs without modifying pre-existing production
