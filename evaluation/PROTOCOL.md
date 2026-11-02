@@ -1,4 +1,4 @@
-# Koinous P6 protocol v1
+# Koinous P6 protocol v2
 
 Status: preregistered engineering protocol; **no empirical results yet**. This is a
 small descriptive pilot, not a statistical proof that discussion is superior.
@@ -39,8 +39,18 @@ answers use the product's final-position format with empty peer declarations;
 discussion uses the unchanged product prompts and validation. This tests the product
 workflow bundle (including prompt structure), not a causal peer-discussion-only
 ablation. SDK conversation retention inside a discussion follows the product;
-standalone samples always start fresh. Reasoning uses each SDK's defaults; no claim
-of cross-model/provider equality. Record versions and source hashes.
+standalone samples always start fresh. Optional `codexReasoningEffort` explicitly
+sets the pinned Codex SDK's `modelReasoningEffort` for every OpenAI participant in
+every arm, and is included in the manifest/hash. Omission preserves SDK defaults;
+Claude remains on its SDK default. Equal requested effort does not guarantee equal
+compute or effective provider behavior. Record versions and source hashes.
+
+The user's 2026-11-02 roster is `gpt-6-astra` (codex) and `gpt-6.1-sol` (codex-2),
+both `medium`. Version 2 adds this explicit setting before any empirical run;
+version 1 used SDK defaults and has only synthetic plumbing evidence. Model choice
+is not spending authorization or proof of account entitlement. The models and
+medium support are documented at https://developers.openai.com/api/docs/models/gpt-6-astra
+and https://developers.openai.com/api/docs/models/gpt-6.1-sol .
 
 All arms receive identical task/question context and no external research. Answers
 have the same approximate 450-word target; existing prose warnings and blocking
