@@ -79,6 +79,10 @@ Pinned packages: `@openai/codex-sdk@0.166.0`, `@anthropic-ai/claude-agent-sdk@0.
 
 ### Subscription authentication and provider selection
 
+For personal browser sign-in and explicit real-discussion startup, follow
+[Use your own subscriptions](DEMO.md#use-your-own-subscriptions-for-real-discussions).
+Start with `npm ci` and `npm run setup`. Setup never enables model inference.
+
 `KOINOUS_PROVIDERS` sets the initial UI selection and the default roster when a request omits selection: `codex,claude`, `codex,grok`, `claude,grok`, or all three (the default). Ordering is preserved. Fewer than two, duplicate, empty, or unsupported IDs fail before dispatch. Each session gets fresh adapters. The call cap is the selected count × requested rounds: at most six calls for a pair or nine for three providers.
 
 ```bash

@@ -17,8 +17,8 @@ W1–W6 uses new explicit product planning weights (not time estimates).
 | W6 Authorized live acceptance | 10% | User-authorized two/three-provider acceptance of revised workflow | Passed: bounded Codex/Claude idea-only subscription discussion; three-provider attempt failed on Grok timeout; broader live research unverified |
 
 Current overall and workflow track: 100% for the previously passed W1–W6 scope.
-Current task: one-command demo — review, implement, verify, document/deliver
-(equal weights), 4/4 complete (100%); verified and prepared for pull-request delivery.
+Current task: personal subscription setup — review, implement, verify, document/deliver
+(equal weights), 4/4 complete (100%); offline verified, prepared for PR delivery.
 W6 retains its prior two-provider pass; nine-response Grok acceptance is unpassed.
 The new smoke localized its wait to inference; backend/routing cause remains unknown.
 Inference disabled; no further live runs authorized. Enterprise hardening and PKG deferred.
@@ -42,6 +42,39 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### Personal subscription setup (2026-11-01)
+
+Added npm run setup (offline help), explicit login codex/login claude commands,
+status with content-free ready/not-confirmed results, and start:real with mandatory
+--enable-inference. Browser authentication is delegated to pinned installed CLIs:
+Codex forced_login_method=chatgpt; Claude forceLoginMethod=claudeai and --claudeai.
+Only fixed auth commands are allowed; no prompt, API key, Console or arbitrary flags.
+Provider subprocess environments reuse subscriptionEnvironment's allowlist. Credentials
+remain in each user's provider store; Koinous does not copy or save credentials.
+Status requires Codex's exact ChatGPT marker or Claude loggedIn=true/authMethod=claude.ai;
+unknown methods, API keys, helpers, injected tokens and third-party modes fail closed.
+Login success is not quota, entitlement or inference verification.
+
+Real startup overrides inherited live flags to off, checks explicit opt-in and both
+subscription statuses, then enables only this server process. Grok always disabled.
+No .env read/write. Starting the server sends no model prompt; user UI submission is
+required. Shutdown clears the process opt-in. Existing adapter login restrictions,
+read-only/tool controls and unknown-cost reporting remain unchanged.
+
+PKG-first investigation found subscriptionEnvironment, CodexAdapter and ClaudeAdapter;
+confirmed source directly. No existing functions changed: setup and real-launcher
+helpers are new, with no pre-change blast-radius callers. Pinned CLI login --help
+and official Codex authentication / Claude CLI reference verified command contracts.
+No actual login, auth-status or model command was run during development.
+
+Verification: TypeScript plus 478 Node and 33 Python tests passed. New offline tests
+cover fixed commands, wrong/API/unknown auth methods, redacted status, login failure,
+explicit opt-in, both-provider gate, Grok exclusion and no sessions on startup. Real
+runner is replaced with fakes; npm run setup ran offline, and start:real without flag
+refused before auth. Browser login, live status and real inference remain unverified
+until separately authorized. Evidence: runs/subscription-setup/check.log.
+Enterprise hardening and PKG deferred; W1–W6 prior scoped acceptance unchanged.
 
 ### One-command mock demo (2026-11-01)
 
