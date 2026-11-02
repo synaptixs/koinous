@@ -106,8 +106,14 @@ Pinned login command contracts were checked with local CLI help and official
 [Claude CLI reference](https://code.claude.com/docs/en/cli-reference) documentation.
 The setup uses ChatGPT-only Codex configuration and Claude's explicit `--claudeai`
 flag; inherited API keys and custom endpoint/cloud routing are excluded from the
-provider environment. Browser logins and real model calls have not been tested for
-this new flow; validation uses offline fakes. Platform-specific native CLI packages
+provider environment. Fresh-clone authentication status confirmed both existing
+subscription logins. A subsequent six-response live run exposed duplicate Claude
+peer-review/revision entries; its final outcome was insufficient. The strengthened
+unique-peer instructions have passed offline regression tests, but have not yet
+been validated in a new live run. Use the mock walkthrough for a reliable guided
+POC; separately authorize a bounded live validation before promising a clean live
+demonstration. Browser login flows for a new account remain unverified.
+Platform-specific native CLI packages
 must be present after npm ci. macOS was the development test platform.
 
 ## Developer setup and checks
