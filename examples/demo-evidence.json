@@ -1,0 +1,7 @@
+{
+  "snapshotId": "DEMO-SYNTHETIC-0001",
+  "items": [
+    {"id": "demo-01", "uri": "demo://design/grounding", "text": "SYNTHETIC DEMONSTRATION EVIDENCE ONLY. Proposed architecture: agents receive evidence from one published, immutable knowledge snapshot. Not an assertion about any actual repository."},
+    {"id": "demo-02", "uri": "demo://design/validation", "text": "SYNTHETIC DEMONSTRATION EVIDENCE ONLY. Proposal: evaluate cost, citation validity, retrieval quality, and disagreement resolution using human-verified questions."}
+  ]
+}

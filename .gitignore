@@ -1,0 +1,10 @@
+runs/
+node_modules/
+.env
+*.log
+__pycache__/
+*.pyc
+
+.env.*
+!.env.example
+.DS_Store
