@@ -20,8 +20,8 @@ Current overall and workflow track: 100% for the scoped W1–W6 gates. W6 passed
 on 2026-11-02 after the warning-policy correction; this is one successful bounded
 run, not proof of reliability for every idea or a production-readiness claim.
 Weights are unchanged; the final 10% moved only after verifying the live artifacts.
-Current task: PR #5 review/merge verification, bounded run verification and result
-recording — 4/4 complete. Inference disabled, Grok off. Enterprise hardening and PKG
+Current task: one-command live-demo bundle — review, implement, verify, document
+(equal weights), 4/4 complete. Inference disabled, Grok off. Enterprise hardening and PKG
 remain deferred and unestimated.
 
 Review: existing three-round orchestration already provides independent views,
@@ -43,6 +43,28 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### One-command live demo (2026-11-02)
+
+New npm run demo:live bootstraps pinned dependencies with npm ci, reuses or obtains
+local subscription login for Codex/Claude, then delegates to the existing guarded
+start:real launcher. No model prompt is sent until the user starts a UI discussion.
+Grok is disabled, ambient API keys/routing are stripped, and the parent never enables
+inference. The child launcher rechecks both subscription methods before enablement.
+Commands use shell-free argv, bounded auth/install timeouts and captured status size;
+Ctrl+C/termination forwards shutdown to the current child. Help performs no actions.
+Installation replaces node_modules each launch, deliberately avoiding stale native
+SDK packages from another architecture. Node 22.16+ and internet are prerequisites.
+
+PKG-first investigation identified preparePersonalDiscussion, authCommand and
+subscriptionReady. These existing symbols were read and reused unchanged. New
+launcher helpers have no pre-change blast radius; no exhaustive graph claim is made.
+Ten offline tests cover existing/missing/API logins, rechecks, install/login/status/
+server failures, cancellation, argument/Node preflight, sanitized subprocess env,
+bounded output and timeouts. Real provider login/model calls remain unrun this task.
+Full quality gate passed: TypeScript, 502 Node tests and 33 Python tests.
+The bundle includes START-HERE.txt and the pinned source; credentials, private runs,
+node_modules and VM artifacts are excluded.
 
 ### Live acceptance of prose warnings (2026-11-02)
 

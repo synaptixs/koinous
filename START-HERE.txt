@@ -1,0 +1,64 @@
+KOINOUS POC — ONE-COMMAND LIVE DEMO
+
+1. Install Node.js 22.16 or newer (with npm).
+2. Extract this bundle fully. Open a terminal in koinous-poc/.
+3. Run:
+
+   npm run demo:live
+
+The command installs pinned dependencies (internet required), checks your existing
+Codex and Claude subscription logins, opens missing provider login flows, then
+starts the live UI. Complete browser sign-ins with your own ChatGPT and Claude
+subscription accounts. No API-key fallback; Grok stays off. Do not share credentials.
+
+Open the localhost URL printed in the terminal (normally http://127.0.0.1:3030).
+Select models available to your subscriptions. Last tested: Codex gpt-6-astra and
+Claude claude-opus-5-5. Keep three rounds for a six-call discussion. Paste your idea
+and click Start discussion. Setup itself sends no model prompt; Start discussion
+uses your subscription quota. Stop with Ctrl+C to disable inference again.
+
+EXAMPLE IDEA
+How should we improve lexical, semantic or hybrid search over a Product Knowledge
+Graph (PKG) of source code and documentation so LLMs can answer developer questions
+through MCP tools? Compare alternatives, review each other, revise, and provide
+one final recommendation with unresolved disagreements.
+
+OPTIONAL CONTEXT
+Design discussion only. No corpus, benchmarks or measured gains are supplied.
+State assumptions and research gaps; do not invent citations. Compare exact
+identifier/error lookup, conceptual search, typed graph expansion, snapshot
+consistency, code/doc conflicts, bounded MCP search/fetch/expand and an
+evaluation-led rollout. Preserve unresolved disagreements.
+
+DEMO FLOW
+Use Research: Use idea and supplied context. Show independent analyses, peer reviews,
+revised recommendations and next actions. Disagreements and length warnings remain
+visible. Download the Markdown report. The app does not force agreement.
+
+NO-LOGIN OPTION
+   npm run demo
+This needs no npm install and includes a synthetic six-response saved discussion.
+It uses mock providers only. It can also reopen discussions saved on this machine.
+
+TROUBLESHOOTING
+- Run npm run demo:live -- --help for offline help.
+- Dependency install requires internet and replaces node_modules each time, so
+  packages match this machine. Never copy node_modules between operating systems.
+- Login fails: rerun when ready or use npm run setup -- login codex / login claude.
+  Unknown or API-key login methods are refused before live startup.
+- Port occupied: macOS/Linux: PORT=3031 npm run demo:live
+  PowerShell: $env:PORT='3031'; npm run demo:live
+- Only localhost is exposed; screen-share the demo. No VM or Grok setup is needed.
+- Subscription cost may remain unknown; provider estimates are not invoices.
+
+CONTENTS AND VERIFICATION
+Source, pinned package-lock.json, tests, docs and a synthetic saved sample.
+No credentials, private discussions, node_modules, VM images or Git history.
+New setup flow tested offline with installation/auth/server fakes; no new model
+calls. Previous live UI workflow passed six responses with complete peer coverage.
+Fresh extracted mock/help paths tested on macOS; other operating systems and
+new-account browser login flows remain unverified. This is not an offline installer:
+Node/npm must already exist and live setup downloads dependencies.
+
+Read DEMO.md for details. BUNDLE-MANIFEST.json identifies the source revision and
+packaged file hashes. Old local URLs in historical docs do not refer to this machine.
