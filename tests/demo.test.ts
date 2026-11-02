@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {Readable} from 'node:stream';
+import type {IncomingMessage,ServerResponse} from 'node:http';
+import {prepareDemo,SAMPLE_ID} from '../scripts/demo.ts';
+import {SavedSessions} from '../src/saved-sessions.ts';
+
+test('demo overrides live environment, seeds readable history once and executes only mock providers',async t=>{
+ const previous={...process.env};t.after(()=>{for(const key of Object.keys(process.env))if(!(key in previous))delete process.env[key];Object.assign(process.env,previous);});
+ Object.assign(process.env,{MODE:'real',KOINOUS_PROVIDERS:'grok',KOINOUS_DISABLED_PROVIDERS:'codex,claude',KOINOUS_ENABLE_INFERENCE:'1',GROK_BUILD_ENABLE_INFERENCE:'1',CODEX_MODEL:'bad model',CLAUDE_MODEL:'bad model'});
+ const root=mkdtempSync(join(tmpdir(),'koinous-demo-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ const app=prepareDemo(root);assert.equal(app.mode,'mock');
+ assert.equal(process.env.KOINOUS_ENABLE_INFERENCE,'0');assert.equal(process.env.GROK_BUILD_ENABLE_INFERENCE,'0');assert.equal(process.env.KOINOUS_DISABLED_PROVIDERS,'grok');
+ const saved=new SavedSessions(root).load(SAMPLE_ID)!;
+ assert.match(saved.prompt,/SYNTHETIC DEMO/);assert.equal(saved.entries.length,6);assert.equal(saved.outcome?.coverage.valid,2);assert.ok(saved.outcome?.unresolved.length);
+ assert.ok(saved.entries.every(e=>e.usage?.inputTokens===0&&e.usage?.outputTokens===0));
+ const path=join(root,SAMPLE_ID,'events.jsonl'),before=readFileSync(path);
+ const second=prepareDemo(root);assert.deepEqual(readFileSync(path),before);await second.shutdown();
+ let body='';const req=Object.assign(Readable.from([]),{url:`/api/sessions/${SAMPLE_ID}/report`,method:'GET',headers:{}});
+ const res={writeHead(){return this;},end(text:string){body+=text;}};
+ await app.handler(req as unknown as IncomingMessage,res as unknown as ServerResponse);
+ for(const heading of ['## Final recommendation','### Next actions','### Provider reasoning','### Unresolved disagreements'])assert.ok(body.includes(heading));
+ for(const entry of saved.entries)assert.ok(body.includes(entry.text));
+ const s=app.engine.create('Synthetic new demo discussion',3,{providers:['codex','claude'],models:{}},{grounding:'none'});await app.engine.run(s);
+ assert.equal(s.entries.length,6);assert.ok(s.entries.every(e=>e.text.toLowerCase().includes('mock')));assert.equal(s.spendKnownUSD,0);await app.shutdown();
+ writeFileSync(path,'broken');assert.throws(()=>prepareDemo(root),/incomplete or duplicated/);assert.equal(readFileSync(path,'utf8'),'broken');
+});

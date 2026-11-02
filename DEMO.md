@@ -6,26 +6,26 @@ Use Node.js 22.16 or newer (Node 22.10 is the package minimum). Extract the sour
 archive or clone the repository, then open a terminal in the Koinous project root.
 The mock runtime uses Node built-ins and does not require npm install.
 
-macOS/Linux:
+On macOS, Linux or Windows PowerShell:
 
 ```sh
-MODE=mock KOINOUS_PROVIDERS=codex,claude KOINOUS_DISABLED_PROVIDERS=grok KOINOUS_ENABLE_INFERENCE=0 GROK_BUILD_ENABLE_INFERENCE=0 node --experimental-strip-types src/server.ts
+npm run demo
 ```
 
-Windows PowerShell:
+Open the sample URL printed in the terminal, or http://127.0.0.1:3030 and select
+**[SYNTHETIC DEMO] Improve developer search over source code and documentation**
+in Saved discussions. The bundled sample has six synthetic responses, peer reviews,
+a final recommendation, next actions and disagreements. It is not a real model run.
+Startup copies it into ignored `runs/` once; subsequent starts preserve existing data.
 
-```powershell
-$env:MODE='mock'
-$env:KOINOUS_PROVIDERS='codex,claude'
-$env:KOINOUS_DISABLED_PROVIDERS='grok'
-$env:KOINOUS_ENABLE_INFERENCE='0'
-$env:GROK_BUILD_ENABLE_INFERENCE='0'
-node --experimental-strip-types src/server.ts
-```
+The launcher does not load `.env` and overrides inherited provider/mode/inference
+settings: mock Codex and Claude only, Grok off, both live-inference switches disabled.
+No login, API key, VM, dependency installation or model call is needed. New discussions
+are also mock-only. Keep research set to “Use idea and supplied context” for an offline demo.
 
-Open http://127.0.0.1:3030. These commands do not load a local .env file.
-If that port is occupied, set PORT=3031 (PowerShell: $env:PORT='3031') and use that URL.
-Stop with Ctrl+C. The server binds to localhost: use screen sharing for the demo.
+If port 3030 is occupied, use `PORT=3031 npm run demo` on macOS/Linux, or set
+`$env:PORT='3031'` before `npm run demo` in PowerShell. Stop with Ctrl+C.
+The server binds to localhost: use screen sharing for the demo.
 
 ## Five-minute walkthrough
 
@@ -68,7 +68,7 @@ npm run check
 
 The lockfile pins SDK/tool versions. The complete offline check also needs Python 3;
 some OS-confinement fixtures are platform-specific. No model calls are made by the
-quality gate. The most recent macOS gate passed TypeScript, 473 Node and 33 Python tests.
+quality gate. See the implementation plan for the latest verified offline gate.
 A live demo is a separate deliberate step requiring the presenter's own subscription
 logins and explicit inference enablement. Do not use API-key fallback. Grok stays off.
 Enterprise hardening and PKG integration remain deferred.

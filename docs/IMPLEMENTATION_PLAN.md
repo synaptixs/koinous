@@ -17,8 +17,8 @@ W1–W6 uses new explicit product planning weights (not time estimates).
 | W6 Authorized live acceptance | 10% | User-authorized two/three-provider acceptance of revised workflow | Passed: bounded Codex/Claude idea-only subscription discussion; three-provider attempt failed on Grok timeout; broader live research unverified |
 
 Current overall and workflow track: 100% for the previously passed W1–W6 scope.
-Current task: UI report verification and demo/GitHub handoff — review, verify download,
-prepare demo, document/publish (equal weights), 3/4 complete (75%); publishing in progress.
+Current task: one-command demo — review, implement, verify, document/deliver
+(equal weights), 4/4 complete (100%); verified and prepared for pull-request delivery.
 W6 retains its prior two-provider pass; nine-response Grok acceptance is unpassed.
 The new smoke localized its wait to inference; backend/routing cause remains unknown.
 Inference disabled; no further live runs authorized. Enterprise hardening and PKG deferred.
@@ -42,6 +42,33 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### One-command mock demo (2026-11-01)
+
+`npm run demo` starts the existing application in mock mode on localhost with an
+explicit MockAdapter-only factory, Codex/Claude defaults, Grok disabled and both
+live-inference flags 0. It does not load .env or require dependency installation.
+Inherited mode, model and provider settings cannot select real adapters. The new
+launcher installs a bundled synthetic six-response saved discussion once, preserves
+existing local files, reports corrupt/duplicate history rather than overwriting it,
+and prints a direct saved-session URL. No private real discussion is bundled.
+
+PKG-first investigation located createApplication, Engine, MockAdapter and
+SavedSessions; source was read to confirm their contracts. Existing functions were
+not changed, so no existing-symbol blast-radius claim is made. New prepareDemo has
+no pre-change callers. Changes are isolated to launcher, fixture, npm command,
+documentation and an offline test. Existing protections are unchanged.
+
+Offline test covers inherited live environment, repeated seed preservation,
+malformed local sample, report sections/originals and six new mock responses.
+Clean-copy startup used no node_modules, a deliberately live .env, and inherited
+live flags: npm run demo still started mock-only. Browser verified the bundled
+six-response saved session, complete declared peer/revision coverage, recommendation,
+next actions, dissent, only Codex/Claude selectable and mock/no-model banner.
+A first full gate and isolated native-CLI check hit the existing startup deadline;
+both pinned CLIs later passed isolated version/help (no authentication) with unchanged
+binary hashes and no code or sandbox changes. Final unchanged gate passed TypeScript, 474 Node and 33 Python tests.
+No new model/authentication calls. Enterprise/PKG deferred; W1–W6 scope unchanged.
 
 ### UI download verification and team demo handoff (2026-11-01)
 
