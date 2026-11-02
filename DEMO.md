@@ -59,6 +59,57 @@ The shared direction is a lexical plus typed-graph baseline, then an evaluated
 semantic/hybrid comparison. Exact-hit priority and code/documentation authority
 remain disputed. Costs are partially unknown, not zero.
 
+## Use your own subscriptions for real discussions
+
+Each person runs Koinous locally and signs in with their own accounts. Browser login
+is handled by the pinned provider CLI, not a password or token form in Koinous.
+
+```sh
+npm ci
+npm run setup
+npm run setup -- login codex
+npm run setup -- login claude
+npm run setup -- status
+```
+
+The two login commands open the provider browser flows. Choose your ChatGPT account
+for Codex and Claude subscription account for Claude. They store credentials in the
+provider's normal local credential store (including any existing CODEX_HOME or
+CLAUDE_CONFIG_DIR override). No credentials are copied into the repository or shared
+with teammates. Existing CLI sign-ins may be reused: start with `setup -- status`.
+Organization-managed restrictions still apply; mismatched existing authentication
+may require signing in again. No API-key or Console billing fallback is offered.
+
+`setup` by itself prints instructions offline. `login` and `status` are explicitly
+requested authentication commands; neither sends a model prompt. Status displays
+only ready/not-confirmed, not account details, tokens or raw provider output.
+It confirms the reported authentication method, not current quota, model access or
+successful inference. Unknown/unsupported methods fail closed.
+
+When ready to spend your own subscription quota, deliberately run:
+
+```sh
+npm run start:real -- --enable-inference
+```
+
+This checks both subscription logins and starts localhost:3030 with Codex and Claude.
+Choose models in the UI, enter your idea, and press Start discussion. Up to six
+application calls are allowed for a three-round discussion; internal SDK behavior
+and tokens are not a hard monetary ceiling. Unknown subscription costs stay explicit.
+The launcher itself sends no model prompt. It does not load or change .env.
+Without the flag it refuses startup, even if live flags were inherited from the shell.
+Grok remains disabled. Ctrl+C stops the server; it does not persist inference opt-in.
+Use `npm run demo` anytime for synthetic discussions without subscription usage.
+
+Pinned login command contracts were checked with local CLI help and official
+[Codex authentication](https://learn.chatgpt.com/docs/auth) and
+[Claude CLI reference](https://code.claude.com/docs/en/cli-reference) documentation.
+The setup uses ChatGPT-only Codex configuration and Claude's explicit `--claudeai`
+flag; inherited API keys and custom endpoint/cloud routing are excluded from the
+provider environment. Browser logins and real model calls have not been tested for
+this new flow; validation uses offline fakes. Platform-specific native CLI packages
+must be present after npm ci. macOS was the development test platform.
+
 ## Developer setup and checks
 
 ```sh
