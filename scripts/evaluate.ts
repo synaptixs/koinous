@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {join,resolve} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {createAdapters} from '../src/adapters.ts';
+import {createAdapters,codexReasoningEffort} from '../src/adapters.ts';
 import type {Adapter} from '../src/core.ts';
 import {ARMS,CALLS,hash,validateTasks,evaluationSelection,executeCell,blindPackets,dashboardHtml,observability,gradeReport} from '../src/evaluation.ts';
 import type {EvaluationResult,Factory} from '../src/evaluation.ts';
@@ -20,7 +20,8 @@ if(command==='grade'){
  console.log(JSON.stringify(report,null,2));
 }else{
  const config=json(configPath);
- if(Object.keys(config).some(k=>!['selection','split'].includes(k))||!['development','heldout'].includes(config.split))throw Error('Config requires selection and development or heldout split');
+ if(Object.keys(config).some(k=>!['selection','split','codexReasoningEffort'].includes(k))||!['development','heldout'].includes(config.split))throw Error('Config requires selection and development or heldout split');
+ const reasoningEffort=codexReasoningEffort(config.codexReasoningEffort);
  const selection=evaluationSelection(config.selection),allTasks=validateTasks(json(join(repo,'evaluation/tasks.json'))),tasks=allTasks.filter(t=>t.split===config.split);
  const tracked=git('ls-files','-z').split('\0').filter(Boolean);
  const relevant=tracked.filter(p=>/^(src\/|scripts\/|evaluation\/|package(-lock)?\.json|tsconfig\.json)/.test(p));
@@ -30,7 +31,7 @@ if(command==='grade'){
  const pkg=json(join(repo,'package.json'));
  const versions=Object.fromEntries(Object.entries({...pkg.dependencies,...pkg.devDependencies}).map(([name,expected])=>{const actual=json(join(repo,'node_modules',name,'package.json')).version;if(actual!==expected)throw Error(`Dependency mismatch: ${name}`);return [name,actual];}));
  const dirty=git('status','--porcelain').length>0;
- const spec={protocol:'koinous-p6-v1',revision:git('rev-parse','HEAD'),dirty,sourceHashes,lockHash:hash(readFileSync(join(repo,'package-lock.json'),'utf8')),datasetHash:hash(JSON.stringify(allTasks)),selection,split:config.split,taskIds:tasks.map(t=>t.id),arms:ARMS,maxCalls:tasks.length*16,settings:{timeoutMs:120000,maxRounds:3,retries:0,research:false,tools:false,wordTarget:450,reasoning:'SDK default; no cross-provider equivalence claimed',claudeMaxCallUsd:0.50,knownCostSessionAdvisoryUsd:3},versions,node:process.version,platform:process.platform,arch:process.arch};
+ const spec={protocol:'koinous-p6-v2',revision:git('rev-parse','HEAD'),dirty,sourceHashes,lockHash:hash(readFileSync(join(repo,'package-lock.json'),'utf8')),datasetHash:hash(JSON.stringify(allTasks)),selection,split:config.split,taskIds:tasks.map(t=>t.id),arms:ARMS,maxCalls:tasks.length*16,settings:{timeoutMs:120000,maxRounds:3,retries:0,research:false,tools:false,wordTarget:450,reasoning:{codex:reasoningEffort??'SDK default',claude:'SDK default',scope:'Requested effort; effective provider behavior unverified'},claudeMaxCallUsd:0.50,knownCostSessionAdvisoryUsd:3},versions,node:process.version,platform:process.platform,arch:process.arch};
  const protocolHash=hash(JSON.stringify(spec));
  const synthetic=command!=='live';
  if(command==='live'){
@@ -56,7 +57,7 @@ if(command==='grade'){
   const controller=new AbortController();const stop=()=>controller.abort();process.once('SIGINT',stop);process.once('SIGTERM',stop);
   const results:EvaluationResult[]=[];
   let stopped=false;
-  const factory:Factory=s=>createAdapters(synthetic?'mock':'real',s.providers,s.models).map((adapter):Adapter=>({...adapter,id:adapter.id,prepare:adapter.prepare?.bind(adapter),dispose:adapter.dispose?.bind(adapter),run:async(prompt,round,signal)=>{appendFileSync(join(out,'prompts.jsonl'),JSON.stringify({agent:adapter.id,round,sha256:hash(prompt),prompt})+'\n');return adapter.run(prompt,round,signal);}}));
+  const factory:Factory=s=>createAdapters(synthetic?'mock':'real',s.providers,s.models,reasoningEffort).map((adapter):Adapter=>({...adapter,id:adapter.id,prepare:adapter.prepare?.bind(adapter),dispose:adapter.dispose?.bind(adapter),run:async(prompt,round,signal)=>{appendFileSync(join(out,'prompts.jsonl'),JSON.stringify({agent:adapter.id,round,sha256:hash(prompt),prompt})+'\n');return adapter.run(prompt,round,signal);}}));
   try{
    for(let ti=0;ti<tasks.length;ti++){
     // Predeclared rotation limits fixed-order confounding; no outcome-driven reorder.

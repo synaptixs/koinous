@@ -59,8 +59,9 @@ Review `evaluation/PROTOCOL.md` and fixture checks before authorizing live work.
 
 The script pins 120-second deadlines, six discussion calls, no research, no automatic
 retry, and Claude's $0.50 per-call SDK setting. Unset deadline, token-cap, session-USD
-and provider-workdir overrides; conflicting settings refuse. Defaults/reasoning are
-recorded, not asserted equivalent across providers. Installed SDK mismatches refuse.
+and provider-workdir overrides; conflicting settings refuse. Optional `codexReasoningEffort` (for example `"medium"`) is forwarded to all
+OpenAI participants and recorded in the manifest/hash. Omission preserves SDK
+defaults; Claude defaults are unchanged. Requested effort is not proof of equal compute. Installed SDK mismatches refuse.
 Any source/config/runtime-version change invalidates the preflight hash.
 
 ## Stop, preserve, recover

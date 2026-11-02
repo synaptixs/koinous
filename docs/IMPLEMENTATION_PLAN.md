@@ -26,7 +26,29 @@ New P6 weights below partition its work for tracking, not the overall gate.
 | E4 Operations/delivery | 15% | Playbook, full quality gate, reviewable PR | Passed offline: 1/1 |
 | E5 Empirical acceptance | 20% | Authorized roster/run, independent blind grades, honest comparative result | Pending authorization: 0/1 |
 
-Task steps (equal 25%): review, implement, verify, document. Review, implementation, verification and documentation complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), not merged. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
+Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
+
+
+Current task: requested-model preflight (review, implement, verify, document; equal
+25% each). Review, implementation, verification and documentation passed (4/4).
+Offline gate: TypeScript, 531 Node tests and 33 Python tests passed. Fake SDK
+coverage checks 16 invocations across all arms and both exact model IDs at medium;
+CLI checks effort hashing and invalid-setting refusal. No authentication or inference.
+Configs are outside the checkout in notes/koinous-p6-astra-sol-{development,heldout}.json;
+clean committed preflight manifests are generated after this correction is committed.
+The user selected gpt-6-astra and gpt-6.1-sol, both medium. The v1 runner recorded
+SDK defaults and could not enforce this request. Protocol v2 explicitly carries
+Codex reasoning effort into every arm; no empirical v1 run has occurred. Existing
+P6 gates remain historical offline acceptance, and E5 remains pending authorization.
+
+Pre-edit PKG at clean c648369: CodexAdapter and its run member each have six bound
+call sites in adapters, same-provider and subscription-config tests; constructor
+has zero bound callers. Each has one implementation-plan doc match. createAdapters
+has 13 bound callers (evaluation script and grok-build/mock-idea/same-provider/
+subscription-config tests), zero direct docs and one uncovered caller scripts/evaluate.
+No truncation; TypeScript unresolved calls are not tracked. CodexAdapter regression
+query reports coverage/no gaps; constructor/run member gap queries return not found.
+The new SDK-boundary and CLI preflight tests cover this measured limitation.
 
 PKG navigation used map_repo on clean 2b2648f. It reports TypeScript/JavaScript
 call graph coverage as heuristic. New evaluation modules reuse existing APIs without modifying pre-existing production

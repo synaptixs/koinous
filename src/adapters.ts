@@ -31,26 +31,33 @@ export class MockAdapter implements Adapter {
 }
 
 // Type-only imports keep the dependency-free mock runtime available.
-import type {Thread, ThreadOptions, CodexOptions} from '@openai/codex-sdk';
+import type {Thread, ThreadOptions, CodexOptions, ModelReasoningEffort} from '@openai/codex-sdk';
 import type {Options, SDKMessage, Query, ModelUsage} from '@anthropic-ai/claude-agent-sdk';
 import {ProviderFailure, tokenCount, cost, sumKnown, positiveNumber} from './provider-runtime.ts';
 
 type CodexClient = {startThread(options: ThreadOptions): Pick<Thread, 'id' | 'run'>};
 type ClaudeQuery = (params: {prompt: string; options: Options}) => AsyncIterable<SDKMessage> & Pick<Query, 'close'>;
 
+export function codexReasoningEffort(value:unknown):ModelReasoningEffort|undefined {
+  if(value===undefined)return;
+  if(typeof value!=='string'||!['minimal','low','medium','high','xhigh','max','ultra','persistent'].includes(value))throw new ProviderFailure('configuration','Unsupported Codex reasoning effort');
+  return value as ModelReasoningEffort;
+}
+
 export class CodexAdapter implements Adapter {
   id: AgentId = 'codex';
   private model: string;
+  private reasoningEffort?: ModelReasoningEffort;
   private thread?: Pick<Thread, 'id' | 'run'>;
   private load: (options: CodexOptions) => Promise<CodexClient>;
-  constructor(load: (options: CodexOptions) => Promise<CodexClient> = async options => new (await import('@openai/codex-sdk')).Codex(options), model = process.env.CODEX_MODEL || '') { this.load = load; this.model = model; }
+  constructor(load: (options: CodexOptions) => Promise<CodexClient> = async options => new (await import('@openai/codex-sdk')).Codex(options), model = process.env.CODEX_MODEL || '', reasoningEffort?:ModelReasoningEffort) { this.load = load; this.model = model; this.reasoningEffort=codexReasoningEffort(reasoningEffort); }
   async run(prompt: string, _round: Round, signal: AbortSignal): Promise<Reply> {
     signal.throwIfAborted();
     const requestedModel = this.model || undefined;
     if (!this.thread) {
       const cli = await this.load({env: subscriptionEnvironment(), config: {forced_login_method: 'chatgpt', model_provider: 'openai'}});
       signal.throwIfAborted();
-      this.thread = cli.startThread({model: requestedModel, workingDirectory: process.env.CODEX_WORKDIR || process.cwd(), skipGitRepoCheck: true, sandboxMode: 'read-only', approvalPolicy: 'never', networkAccessEnabled: false, webSearchMode: 'disabled'});
+      this.thread = cli.startThread({model: requestedModel, ...(this.reasoningEffort?{modelReasoningEffort:this.reasoningEffort}:{}), workingDirectory: process.env.CODEX_WORKDIR || process.cwd(), skipGitRepoCheck: true, sandboxMode: 'read-only', approvalPolicy: 'never', networkAccessEnabled: false, webSearchMode: 'disabled'});
     }
     const turn = await this.thread.run(prompt, {signal});
     const u = turn.usage;
@@ -144,7 +151,8 @@ export class GrokAdapter implements Adapter {
     return {text: content, ...details};
   }
 }
-export function createAdapters(mode: string, providers: readonly ParticipantId[] = defaultParticipants(), models?: Selection['models']): Adapter[] {
+export function createAdapters(mode: string, providers: readonly ParticipantId[] = defaultParticipants(), models?: Selection['models'], reasoningEffort?:ModelReasoningEffort): Adapter[] {
+  const effort=codexReasoningEffort(reasoningEffort);
   const roster = validateParticipants(providers);
   const selection = models === undefined ? resolveSelection({providers: roster}) : resolveSelection({providers: roster, models}, {providers: roster, models});
   if (!['mock', 'real'].includes(mode)) throw new ProviderFailure('configuration', 'MODE must be mock or real');
@@ -156,7 +164,7 @@ export function createAdapters(mode: string, providers: readonly ParticipantId[]
     const provider=providerFor(id);
     // One fresh SDK adapter (and therefore conversation) per participant. Only
     // authentication is shared; each call retains its own selected model/usage.
-    const adapter:Adapter=provider==='codex'?new CodexAdapter(undefined,selection.models[id]):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id]):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
+    const adapter:Adapter=provider==='codex'?new CodexAdapter(undefined,selection.models[id],effort):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id]):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
     if(id===provider)return adapter;
     return {id,maxTotalTokensPerCall:adapter.maxTotalTokensPerCall,run:adapter.run.bind(adapter),...(adapter.prepare?{prepare:adapter.prepare.bind(adapter)}:{}),...(adapter.dispose?{dispose:adapter.dispose.bind(adapter)}:{})};
   });
