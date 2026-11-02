@@ -77,5 +77,5 @@ test('invalid and overlength responses remain explicit and cannot break original
  assert.ok(report.includes('`````text\n'+text+'\n`````'));
  const overlong=JSON.stringify({reviews:[],revisedView:'x'.repeat(1201),openQuestions:[]});
  const invalid=makeReport({...s,entries:[{agent:'claude',round:2,text:overlong}]});
- assert.ok(invalid.includes(overlong));assert.match(invalid,/revisedView/);assert.doesNotMatch(invalid,/#### Revised view/);
+ assert.ok(invalid.includes(overlong));assert.match(invalid,/revisedView/);assert.match(invalid,/#### Revised view/);assert.match(invalid,/Length warning — usable/);assert.doesNotMatch(invalid,/No structured response warnings or errors recorded/);
 });

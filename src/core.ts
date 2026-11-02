@@ -92,7 +92,7 @@ export function originalMarkdown(text:string):string {
 function responseMarkdown(entry:Entry):string[] {
  const lines=[`### ${entry.agent}`,''];
  const validation=responseValidation(entry);
- if(validation)lines.push(`**Validation:** ${validation.status==='valid'?'Schema checks passed — not a fact check or agreement.':'Invalid — excluded from structured coverage and agreement.'}`,'',...validation.issues.map(i=>`- ${reportCell(i.message)}`),'');
+ if(validation)lines.push(`**Validation:** ${validation.status==='valid'?'Schema checks passed — not a fact check or agreement.':validation.status==='warning'?'Length warning — usable for structured coverage and agreement; not a fact check.':'Invalid — excluded from structured coverage and agreement.'}`,'',...validation.issues.map(i=>`- ${reportCell(i.message)}`),'');
  const review=entry.round===2?parseReview(entry.text):null;
  const position=entry.round===3?parsePosition(entry.text):null;
  if(review){

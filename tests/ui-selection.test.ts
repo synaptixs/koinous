@@ -224,13 +224,13 @@ test('empty declarations are explicit and do not imply verified agreement',async
  assert.match(renderedText(elements.feed),/No peer responses declared/);assert.match(renderedText(elements.feed),/No disagreements declared; this does not establish agreement/);assert.match(renderedText(elements.feed),/No claims declared; omitted assertions may remain/);
 });
 
-test('invalid live and saved cards display canonical diagnostics while retaining original oversized responses',async()=>{
+test('warning live and saved cards display canonical diagnostics while retaining original oversized responses',async()=>{
  const {responseValidation}=await import('../src/discussion-workflow.ts');
  const text=JSON.stringify({...cardReview,revisedView:'x'.repeat(1246)});
  const entry={agent:'codex',round:2,text,validation:responseValidation({round:2,text})};
  const live=await setup();await live.elements.run.onclick!();live.streams[0].onmessage!({data:JSON.stringify({type:'agent.completed',...entry,spendKnownUSD:0})});
  const saved=await setup(false,false,{...bookmarkedSession,maxRounds:3,entries:[entry]},true,undefined,'http://local/?session=saved-id');
- for(const ui of [live,saved]){const card=ui.elements.feed.children.find(e=>e.className.includes('response-card'))!;assert.match(renderedText(card),/Validation failed/);assert.match(renderedText(card),/1246 characters; limit 1200; 46 over/);assert.equal(card.children.at(-1)!.children[1].textContent,text);assert.doesNotMatch(renderedText(card),/Schema checks passed/);}
+ for(const ui of [live,saved]){const card=ui.elements.feed.children.find(e=>e.className.includes('response-card'))!;assert.match(renderedText(card),/Length warning — usable/);assert.match(renderedText(card),/1246 characters; limit 1200; 46 over/);assert.equal(card.children.at(-1)!.children[1].textContent,text);assert.doesNotMatch(renderedText(card),/Schema checks passed/);}
  assert.equal(saved.requests.length,0);assert.equal(saved.streams.length,0);
 });
 test('invalid fallback retains text and warnings; valid and unavailable schemas are distinct from agreement',async()=>{

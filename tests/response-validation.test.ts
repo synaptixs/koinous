@@ -13,10 +13,10 @@ const peer={peer:'claude',decision:'adopted',reason:'Compare results.'};
 const review={reviews:[peer],revisedView:'Pilot first.',openQuestions:[]};
 const position={direction:'pilot',recommendation:'Pilot first.',rationale:'Learn safely.',risks:[],disagreements:[],nextSteps:['Measure results.'],revisions:[peer]};
 const claim={id:'c1',kind:'assumption',text:'Feasible.',evidenceIds:[],snapshotId:null};
-function check(round:number,value:unknown,path:string,actual:number,limit:number){
+function check(round:number,value:unknown,path:string,actual:number,limit:number,blocking=false){
  const text=JSON.stringify(value),v=responseValidation({round,text})!;
- assert.equal(v.status,'invalid');assert.ok(v.issues.some(i=>i.path===path&&i.code==='too_long'&&i.actual===actual&&i.limit===limit&&i.excess===actual-limit));
- assert.equal(JSON.stringify(value),text);assert.equal(round===2?parseReview(text):parsePosition(text),null);
+ assert.equal(v.status,blocking?'invalid':'warning');assert.ok(v.issues.some(i=>i.path===path&&i.code==='too_long'&&i.actual===actual&&i.limit===limit&&i.excess===actual-limit));
+ assert.equal(JSON.stringify(value),text);assert.equal((round===2?parseReview(text):parsePosition(text))===null,blocking);
 }
 test('review and final field limits remain exact and report actual, limit and excess',()=>{
  assert.ok(parseReview(JSON.stringify({...review,revisedView:'x'.repeat(1200)})));
@@ -38,14 +38,14 @@ test('whole-response and UTF-16 boundaries are unchanged, including fences and w
  check(2,{...review,revisedView:'😀'.repeat(600)+'x'},'revisedView',1201,1200);
  assert.equal(responseValidation({round:1,text:'unstructured'}),undefined);
 });
-test('claim limits and stored claim assessment retain their rejection contract',()=>{
+test('claim prose warns while identifiers and references retain their rejection contract',()=>{
  for(const [key,limit] of [['id',40],['text',600],['snapshotId',200]] as const){
   assert.ok(parseClaims([{...claim,[key]:'x'.repeat(limit)}]));
-  check(3,{...position,claims:[{...claim,[key]:'x'.repeat(limit+1)}]},`claims[0].${key}`,limit+1,limit);
+  check(3,{...position,claims:[{...claim,[key]:'x'.repeat(limit+1)}]},`claims[0].${key}`,limit+1,limit,key!=='text');
  }
- check(3,{...position,claims:[{...claim,evidenceIds:['x'.repeat(201)]}]},'claims[0].evidenceIds[0]',201,200);
+ check(3,{...position,claims:[{...claim,evidenceIds:['x'.repeat(201)]}]},'claims[0].evidenceIds[0]',201,200,true);
  const parsed=parseClaims([claim])!;const assessment={version:1,declaredBy:['codex'],unassessed:[],scope:'Declared claims',checks:assessClaims('codex',parsed)};
- assert.ok(validClaimAssessment(assessment));assert.equal(validClaimAssessment({...assessment,checks:[{...assessment.checks[0],claim:{...claim,text:'x'.repeat(601)}}]}),false);
+ assert.ok(validClaimAssessment(assessment));assert.equal(validClaimAssessment({...assessment,checks:[{...assessment.checks[0],claim:{...claim,text:'x'.repeat(601)}}]}),true);
 });
 test('non-length errors expose canonical paths without echoing untrusted values',()=>{
  for(const [value,code] of [[{...review,extra:'secret'},'unknown_fields'],[{...review,reviews:[peer,peer]},'duplicate'],[{...review,openQuestions:Array(6).fill('x')},'too_many_items'],[{...review,revisedView:9},'invalid_type'],[{reviews:[]},'missing_field'],[{...review,reviews:[{...peer,decision:'secret'}]},'invalid_value']] as const){
@@ -53,7 +53,7 @@ test('non-length errors expose canonical paths without echoing untrusted values'
  }
  assert.ok(responseValidation({round:3,text:'{broken'})?.issues.some(i=>i.code==='invalid_json'));
 });
-test('six offline calls retain oversized originals and usage, emit diagnostics, reject coverage, and reload without rewriting evidence',async t=>{
+test('six offline calls retain oversized originals and usage, emit diagnostics, retain coverage, and reload without rewriting evidence',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'validation-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));let calls=0;
  const original=new Map<string,string>();
  const engine=new Engine(()=>['codex','claude'].map(id=>({id:id as AgentId,async run(_prompt:string,round:1|2|3){calls++;const p={...peer,peer:id==='codex'?'claude':'codex'};
@@ -61,9 +61,22 @@ test('six offline calls retain oversized originals and usage, emit diagnostics, 
  }})),dir);
  const s=engine.create('Synthetic idea',3);await engine.run(s);assert.equal(calls,6);assert.equal(s.calls,6);assert.equal(s.entries.length,6);
  for(const e of s.entries){assert.equal(e.text,original.get(`${e.agent}/${e.round}`));assert.equal(e.usage?.inputTokens,10);}
- assert.equal(s.events.filter(e=>e.type==='response.validated').length,4);assert.equal(s.entries.filter(e=>e.validation?.status==='invalid').length,2);
- assert.equal(workflowAssessment(s).complete,false);assert.equal(s.outcome?.status,'insufficient');assert.equal(s.spendIncomplete,true);
+ assert.equal(s.events.filter(e=>e.type==='response.validated').length,4);assert.equal(s.entries.filter(e=>e.validation?.status==='warning').length,2);
+ assert.equal(workflowAssessment(s).complete,true);assert.equal(s.outcome?.coverage.valid,2);assert.equal(s.spendIncomplete,true);
  assert.match(s.report!,/revisedView: 1246 characters; limit 1200; 46 over/);assert.match(s.report!,/revisions\[0\].reason: 410 characters; limit 400; 10 over/);
  const path=join(dir,s.id,'events.jsonl'),before=readFileSync(path);const saved=new SavedSessions(dir).load(s.id)!;
  assert.deepEqual(saved.entries.map(e=>e.text),s.entries.map(e=>e.text));assert.deepEqual(readFileSync(path),before);assert.equal(saved.report,s.report);
+});
+
+test('length warnings never conceal blocking structural errors or relax total response bounds',()=>{
+ const both={...review,reviews:[{...peer,reason:'x'.repeat(412)},{...peer}],revisedView:'x'.repeat(1220)};
+ const v=responseValidation({round:2,text:JSON.stringify(both)})!;
+ assert.equal(v.version,2);assert.equal(v.status,'invalid');
+ assert.ok(v.issues.some(i=>i.code==='duplicate'&&i.severity==='error'));
+ assert.equal(v.issues.filter(i=>i.severity==='warning').length,2);
+ assert.equal(parseReview(JSON.stringify(both)),null);
+ for(const [round,value,max] of [[2,review,5000],[3,position,12000]] as const){
+  const raw=JSON.stringify(value),text=raw+' '.repeat(max-raw.length+1);
+  const result=responseValidation({round,text})!;assert.equal(result.status,'invalid');assert.equal(result.issues[0].severity,'error');
+ }
 });

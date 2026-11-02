@@ -80,9 +80,9 @@ function validationNotice(validation) {
   const invalid=validation?.status==='invalid';
   note.className='response-validation '+(invalid?'validation-invalid':'validation-info');
   const heading=document.createElement('strong');
-  heading.textContent=invalid?'Validation failed — excluded from structured coverage and agreement':validation?.status==='valid'?'Schema checks passed — not a fact check or agreement':'Schema validation unavailable — readable formatting does not imply validity';
+  heading.textContent=invalid?'Validation failed — excluded from structured coverage and agreement':validation?.status==='warning'?'Length warning — usable for structured coverage and agreement':validation?.status==='valid'?'Schema checks passed — not a fact check or agreement':'Schema validation unavailable — readable formatting does not imply validity';
   note.append(heading);
-  if(invalid){
+  if(invalid||validation?.status==='warning'){
     const list=document.createElement('ul');
     for(const issue of validation.issues||[]){const item=document.createElement('li');item.textContent=issue.message;list.append(item);}
     note.append(list);
