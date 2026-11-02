@@ -63,6 +63,19 @@ covers Codex plus Claude, not this new combination.
    reopen all this information without inference. Missing review coverage prevents
    an engine result from being labelled agreement.
 
+The discussion prompts ask for the strongest credible alternative and the evidence or
+condition that would make it preferable. Peer review focuses on material changes to
+the decision or its test; a participant can explicitly retain its view when a critique
+adds no material change. Final positions keep the comparison in the rationale and
+remain self-contained. These are drafting instructions, not semantic guarantees or
+automatic duplicate detection; all original responses and dissent remain available.
+
+This iteration uses a provisional external model review of an incomplete development
+sample as product feedback. It does not establish improved quality or complete P6's
+human-review gate. New prompts also reach standalone evaluation baselines through
+`composePrompt`; future comparisons require a fresh versioned protocol and separately
+authorized matched attempt. Historical results must not be pooled with new outputs.
+
 Downloaded Markdown reports use numbered actions, provider reasoning, disagreements,
 claim checks and readable peer-review/revision sections. Original responses remain
 verbatim in fenced blocks. Reopened sessions use their recorded assessment; older
