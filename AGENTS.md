@@ -5,11 +5,11 @@
 For every multi-step request, open each reply with THREE separate 20-cell progress
 bars, each with its percentage and rows for all phases/steps (including done ones):
 
-1. **Overall — active idea workflow:** use the W1–W6 table at the top of
-   `docs/IMPLEMENTATION_PLAN.md`. This supersedes P0–P6 sequencing and weighting
-   by the user's explicit scope change. Preserve the old roadmap as history.
-2. **Track:** use the same product workflow when this task spans its phases;
-   do not invent additional infrastructure subtracks.
+1. **Overall:** use the active P0–P6 table at the top of
+   `docs/IMPLEMENTATION_PLAN.md`. The user resumed P6 on 2026-11-02.
+   W1–W6 remains completed history within its narrower scope.
+2. **Track:** use the active P6 E1–E5 acceptance table. P6 empirical completion
+   requires authorized live evidence and independent human grades.
 3. **Task:** review, implement, verify, document (equal weights).
 
 Read the relevant plan tables and effort splits before EACH reply; do not reconstruct
@@ -46,7 +46,8 @@ charges. Historical API smoke scripts are not the subscription validation path.
 
 ## Current product roadmap
 
-The active roadmap is W1–W6. Enterprise hardening and PKG are deferred.
+P6 evaluation/operations is active; W1–W6 is complete within its scoped gates.
+Enterprise hardening and PKG remain deferred.
 Idea-only input is the default. PKG
 grounding remains optional and deferred until the rest of the roadmap is complete
 and the user authorizes its resumption. Do not resume publication/gateway work as a prerequisite for idea
