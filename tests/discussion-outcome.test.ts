@@ -27,7 +27,7 @@ test('same wording with declared disagreement does not erase dissent',()=>{
  const o=assessDiscussion(session([['codex',p({disagreements:['Budget still unresolved.']})],['claude',p()]],['codex','claude']));assert.equal(o.status,'direction-alignment');assert.match(outcomeMarkdown(o).join('\n'),/Budget still unresolved/);
 });
 test('parsing rejects omitted fields, extra endorsement claims, invalid directions and excessive text',()=>{
- for(const value of [{...p(),direction:'whatever'},{...p(),risks:'none'},{...p(),allAgree:true},{...p(),recommendation:''},{...p(),nextSteps:[]},{...p(),rationale:'x'.repeat(1201)}])assert.equal(parsePosition(JSON.stringify(value)),null);
+ for(const value of [{...p(),direction:'whatever'},{...p(),risks:'none'},{...p(),allAgree:true},{...p(),recommendation:''},{...p(),nextSteps:[]}])assert.equal(parsePosition(JSON.stringify(value)),null);
  assert.ok(parsePosition('```json\n'+JSON.stringify(p())+'\n```'));assert.equal(parsePosition('prefix '+JSON.stringify(p())),null);
 });
 test('assessment ignores arrival order and cannot use earlier rounds as final endorsements',()=>{

@@ -34,7 +34,7 @@ export function responseValidation(entry:{round:number;text:string}):ResponseVal
  if(entry.round!==2&&entry.round!==3)return;
  const issues:ValidationIssue[]=[];
  const parsed=entry.round===2?parseReview(entry.text,issues):parsePosition(entry.text,issues);
- return {version:1,status:parsed?'valid':'invalid',issues,lengthUnit:'utf16-code-units'};
+ return {version:2,status:parsed?(issues.length?'warning':'valid'):'invalid',issues,lengthUnit:'utf16-code-units'};
 }
 export function workflowAssessment(s:Session){
  const roster=s.participants??s.selection?.providers??[];
@@ -64,13 +64,13 @@ export function workflowMarkdown(s:Session):string[]{
   if(r.invalidReferences.length)lines.push(`  - Invalid peer references: ${r.invalidReferences.join(', ')}`);
  }
  lines.push('',w.complete?'Declared review and revision coverage is complete.':'Review/revision coverage is incomplete or unassessed; do not interpret final alignment as a fully reviewed agreement.','');
- lines.push('## Response validation diagnostics','','Schema validation is separate from successful delivery and readable formatting. Invalid responses are retained but excluded from structured coverage/agreement. No truncation, automatic repair, or extra model call is performed. Lengths use UTF-16 code units.','');
+ lines.push('## Response validation diagnostics','','Prose length overruns are warnings: structurally usable responses remain included in coverage/agreement. Malformed content, invalid identifiers, excess array items and total-response size violations remain blocking. Historical recorded assessments are preserved; diagnostics here use the current policy. No truncation, automatic repair, or extra model call is performed. Lengths use UTF-16 code units.','');
  for(const entry of s.entries){
   const validation=responseValidation(entry);
   if(!validation||validation.status==='valid')continue;
-  lines.push(`### Round ${entry.round} — ${entry.agent}: invalid`,'',...validation.issues.map(issue=>`- ${safe(issue.message)}`),'');
+  lines.push(`### Round ${entry.round} — ${entry.agent}: ${validation.status}`,'',...validation.issues.map(issue=>`- ${safe(issue.message)}`),'');
  }
- if(!s.entries.some(entry=>responseValidation(entry)?.status==='invalid'))lines.push('No invalid structured responses recorded; missing responses are reported separately.','');
- lines.push('For overlength fields, shorten the named field in a future response to fit the unchanged limit. Original responses remain in the transcript; another live attempt requires authorization.','');
+ if(!s.entries.some(entry=>{const v=responseValidation(entry);return v&&v.status!=='valid';}))lines.push('No structured response warnings or errors recorded; missing responses are reported separately.','');
+ lines.push('Prose warnings preserve the complete text and do not establish factual correctness or consensus. Original responses remain in the transcript; another live attempt requires authorization.','');
  return lines;
 }

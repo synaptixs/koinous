@@ -24,8 +24,9 @@ test('assumptions and proposals remain distinct from facts',()=>{
  assert.equal(assessClaims('grok',[{...fact,kind:'assumption'}],evidence)[0].status,'unsupported');
 });
 test('strict bounded claim schema rejects ambiguity and silent truncation',()=>{
+ assert.deepEqual(parseClaims([{...fact,text:'x'.repeat(601)}])?.[0].text,'x'.repeat(601));
  assert.deepEqual(parseClaims([]),[]);assert.deepEqual(parseClaims([fact]),[fact]);
- for(const value of [null,{},[fact,fact],Array.from({length:9},(_,i)=>({...fact,id:'c'+i})),[{...fact,confidence:1}],[{...fact,kind:'verified'}],[{...fact,text:' '}],[{...fact,text:'x'.repeat(601)}],[{...fact,evidenceIds:['E1','E1']}],[{...fact,evidenceIds:[1]}],[{...fact,snapshotId:4}],[{...fact,id:'bad id'}]])assert.equal(parseClaims(value),null);
+ for(const value of [null,{},[fact,fact],Array.from({length:9},(_,i)=>({...fact,id:'c'+i})),[{...fact,confidence:1}],[{...fact,kind:'verified'}],[{...fact,text:' '}],[{...fact,evidenceIds:['E1','E1']}],[{...fact,evidenceIds:[1]}],[{...fact,snapshotId:4}],[{...fact,id:'bad id'}]])assert.equal(parseClaims(value),null);
 });
 test('claim checks are deterministic and do not mutate the input',()=>{
  const before=JSON.stringify({fact,evidence});assert.deepEqual(assessClaims('codex',[fact],evidence),assessClaims('codex',[fact],evidence));assert.equal(JSON.stringify({fact,evidence}),before);

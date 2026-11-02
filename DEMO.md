@@ -27,6 +27,21 @@ If port 3030 is occupied, use `PORT=3031 npm run demo` on macOS/Linux, or set
 `$env:PORT='3031'` before `npm run demo` in PowerShell. Stop with Ctrl+C.
 The server binds to localhost: use screen sharing for the demo.
 
+## Validation policy and current readiness
+
+Overlength prose fields now display length warnings and remain usable for peer
+coverage and final recommendations. The text and diagnostic counts are preserved.
+Malformed JSON, invalid or duplicate peer IDs, missing fields, excessive list counts,
+identifier/reference limits and whole-response size limits still block parsing.
+Warnings never imply factual correctness or consensus; differing recommendations
+remain visible. Existing saved assessments are preserved as historical records.
+
+Two previously failing real discussions were replayed offline using their exact
+saved responses: both now have complete peer coverage and two usable final positions.
+Separate replay reports retain warnings and disagreements; the original files were
+unchanged. This verifies the handling of those saved failures, not a new live run.
+A reliable live demo is not yet certified; the mock walkthrough remains available.
+
 ## Five-minute walkthrough
 
 1. Explain: “Independent analysis → peer critique → revised positions → one attributed recommendation, with disagreements preserved.”

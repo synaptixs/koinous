@@ -33,11 +33,11 @@ test('duplicate peer replies remain invalid and originals survive engine and rep
  for(const [round,text] of [[2,review],[3,revision]] as const){const entry=s.entries.find(e=>e.agent==='claude'&&e.round===round)!;assert.equal(entry.text,text);assert.equal(entry.validation?.status,'invalid');assert.ok(entry.validation?.issues.some(i=>i.code==='duplicate'));assert.ok(s.report!.includes(text));}
  const events=readFileSync(join(root,s.id,'events.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.equal(events.find(e=>e.type==='agent.completed'&&e.agent==='claude'&&e.round===2).text,review);
 });
-test('peer reason boundaries remain 400 characters; no parser relaxation or repair',()=>{
+test('peer reason warning threshold remains 400 characters without repair',()=>{
  for(const size of [400,401]){
   const p={...peer('codex'),reason:'x'.repeat(size)};
-  assert.equal(parseReview(JSON.stringify({reviews:[p],revisedView:'Pilot.',openQuestions:[]}))!==null,size===400);
-  assert.equal(parsePosition(JSON.stringify({...final('codex'),revisions:[p]}))!==null,size===400);
+  assert.equal(parseReview(JSON.stringify({reviews:[p],revisedView:'Pilot.',openQuestions:[]}))!==null,true);
+  assert.equal(parsePosition(JSON.stringify({...final('codex'),revisions:[p]}))!==null,true);
  }
 });
 
@@ -52,7 +52,7 @@ for(const agent of ['codex','claude'] as AgentId[])test(`${agent}: revision prom
  assert.match(prompt,/check each reason separately/);assert.match(prompt,/rewrite it substantially shorter/);
  assert.doesNotMatch(composePrompt(session,agent,2,''),/REVISION REASON LENGTH CHECK/);
 });
-test('428-character revision reason remains invalid with exact diagnostic and original stored response',async t=>{
+test('428-character revision reason remains usable with warning, exact diagnostic and original stored response',async t=>{
  const root=mkdtempSync(join(tmpdir(),'revision-length-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
  const reason='Synthetic adopted point; unresolved scope. '.repeat(11).slice(0,428);
  assert.equal(reason.length,428);
@@ -61,14 +61,14 @@ test('428-character revision reason remains invalid with exact diagnostic and or
  const session=engine.create('Synthetic regression',3,{providers:['codex','claude'],models:{}});await engine.run(session);
  assert.equal(session.calls,6);assert.equal(session.entries.length,6);
  const entry=session.entries.find(e=>e.agent==='claude'&&e.round===3)!;
- assert.equal(entry.text,invalid);assert.equal(entry.validation?.status,'invalid');
+ assert.equal(entry.text,invalid);assert.equal(entry.validation?.status,'warning');
  assert.ok(entry.validation?.issues.some(i=>i.path==='revisions[0].reason'&&i.code==='too_long'&&i.actual===428&&i.limit===400&&i.excess===28));
- assert.equal(session.outcome?.status,'insufficient');assert.equal(session.outcome?.coverage.valid,1);
+ assert.equal(session.outcome?.coverage.valid,2);
  assert.ok(session.report!.includes(invalid));assert.ok(session.report!.includes('428 characters; limit 400; 28 over.'));
  const events=readFileSync(join(root,session.id,'events.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));
  assert.equal(events.find(e=>e.type==='agent.completed'&&e.agent==='claude'&&e.round===3).text,invalid);
 });
 test('revision reason draft target does not tighten the validator and Unicode uses UTF-16 units',()=>{
  for(const reason of ['x'.repeat(181),'x'.repeat(400),'😀'.repeat(200)])assert.ok(parsePosition(JSON.stringify({...final('codex'),revisions:[{...peer('codex'),reason}]})));
- assert.equal(parsePosition(JSON.stringify({...final('codex'),revisions:[{...peer('codex'),reason:'😀'.repeat(200)+'x'}]})),null);
+ assert.ok(parsePosition(JSON.stringify({...final('codex'),revisions:[{...peer('codex'),reason:'😀'.repeat(200)+'x'}]})));
 });

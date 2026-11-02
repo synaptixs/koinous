@@ -14,14 +14,14 @@ W1–W6 uses new explicit product planning weights (not time estimates).
 | W3 Peer review and revision | 20% | Each peer reviewed, revisions attributed, missing coverage explicit, offline tests | Passed offline |
 | W4 Final recommendation | 20% | Sources, review coverage, recommendation, dissent and next actions in UI/report | Passed offline |
 | W5 Offline acceptance | 10% | Full quality gate and workflow regressions, inference disabled | Passed offline |
-| W6 Authorized live acceptance | 10% | User-authorized two/three-provider acceptance of revised workflow | Passed: bounded Codex/Claude idea-only subscription discussion; three-provider attempt failed on Grok timeout; broader live research unverified |
+| W6 Authorized live acceptance | 10% | One complete usable Codex/Claude discussion with honest warnings and recommendation | Reopened: latest live runs failed length handling; new policy needs offline verification then separately authorized live acceptance |
 
-Current overall and workflow track: 100% for the previously passed W1–W6 scope.
-Current task: concise revision reasons — review, implement, verify, document/deliver
-(equal weights), 4/4 complete (100%); offline verified, prepared for PR delivery.
-W6 retains its prior two-provider pass; nine-response Grok acceptance is unpassed.
-The new smoke localized its wait to inference; backend/routing cause remains unknown.
-Inference disabled; no further live runs authorized. Enterprise hardening and PKG deferred.
+Current overall and workflow track: 90%. W6 is reopened after the latest live failures;
+this corrects the misleading prior 100% readiness presentation. Weights and denominator
+are unchanged. Earlier passes remain historical evidence, not acceptance of this policy.
+Current task: length warnings — review, implement, verify, document/deliver
+(equal weights), 4/4 complete (100%). Inference disabled, Grok off. Enterprise hardening
+and PKG remain deferred and unestimated.
 
 Review: existing three-round orchestration already provides independent views,
 frozen peer exchanges, final JSON positions, conservative agreement, explicit
@@ -42,6 +42,55 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### Prose length warnings (2026-11-02)
+
+User-authorized policy change: a prose field exceeding its existing character
+threshold is now a warning, not grounds to discard an otherwise usable response.
+Version-2 validation distinguishes valid, warning and invalid; each issue includes
+severity, with actual/limit/excess unchanged. Original response text is never trimmed,
+rewritten, deduplicated or retried. Review/revision reasons, revisedView,
+recommendation, rationale, question/risk/disagreement/action text and claim prose
+use warnings. Numeric thresholds remain drafting targets and diagnostic thresholds.
+Malformed JSON, missing/unknown fields, invalid types/choices, empty text, duplicate
+peers/claims, identifier/reference limits, array counts and whole-response bounds
+(5,000 review / 12,000 final UTF-16 units) remain blocking. Warnings do not establish
+factual truth, agreement or peer coverage; those checks still run independently.
+
+Canonical parsers now retain warning-only content, so coverage and final reports
+can use it. UI cards and report diagnostics show length warnings without labeling
+those responses excluded. Historical saved assessment/events/reports are unchanged;
+current diagnostics are labeled as current policy. Offline replays are separate
+artifacts, not silent edits to history or new provider results.
+
+PKG measurements before edits: ResponseValidator has 26 bound call sites across
+parseClaims, parsePosition, parsePeerResponses and parseReview; 16 touched nodes.
+Its valid/issue/text members have 0/16/7 bound callers. responseValidation has six
+call sites; workflowMarkdown and responseMarkdown each one makeReport caller;
+validationNotice has two appendResponse call sites and an implementation-plan doc.
+TypeScript/JavaScript unresolved calls are not tracked; none of the results was
+truncated. Member regression-gap queries returned not found. Class/function gaps
+flagged validClaimAssessment, prepareDemo and preparePersonalDiscussion; their direct
+existing tests are in the full gate. UI gaps flagged appendResponse/openSaved/
+restoreSavedView; live-event and saved-session VM DOM tests exercise warning cards.
+Graph coverage is a floor, not a claim of exhaustive tracing.
+
+Offline replay of both saved live failures (b2ac478b and 4991baa4) delivered their
+six exact recorded responses through fake adapters, with zero provider/model calls.
+Both now have complete declared peer coverage and two usable final positions. The
+428-character revision becomes a warning; the other run's 412-character review and
+1,220-character revisedView become warnings. Outcomes remain direction-alignment
+and split respectively: no forced consensus. SHA-256 checks confirm both original
+events and reports unchanged. Evidence and separate reassessed reports are in ignored
+runs/length-warning-replay/. Private saved responses are not committed as fixtures.
+
+Existing synthetic regressions now test the explicit warning policy, preserving
+original text, exact limits and UTF-16 counts. Mixed warning/error tests prove a
+length warning cannot mask duplicate peers or weaken the total-response cap. Full quality gate passed: TypeScript, 492 Node tests and 33 Python tests. Evidence:
+runs/length-warning-replay/check.log. Live
+behavior is not verified. Inference disabled, Grok off, no authentication/model calls.
+Enterprise hardening and PKG remain deferred. W6 reopened rather than overstating
+readiness based on prior unrelated acceptance.
 
 ### Concise revision reasons (2026-11-02)
 

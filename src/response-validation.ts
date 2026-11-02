@@ -1,5 +1,5 @@
-export type ValidationIssue={path:string;code:'too_long'|'too_many_items'|'invalid_type'|'invalid_value'|'missing_field'|'unknown_fields'|'duplicate'|'invalid_json';message:string;actual?:number;limit?:number;excess?:number};
-export type ResponseValidation={version:1;status:'valid'|'invalid';issues:ValidationIssue[];lengthUnit:'utf16-code-units'};
+export type ValidationIssue={severity?:'warning'|'error';path:string;code:'too_long'|'too_many_items'|'invalid_type'|'invalid_value'|'missing_field'|'unknown_fields'|'duplicate'|'invalid_json';message:string;actual?:number;limit?:number;excess?:number};
+export type ResponseValidation={version:1|2;status:'valid'|'warning'|'invalid';issues:ValidationIssue[];lengthUnit:'utf16-code-units'};
 
 // These checks are used by the canonical parsers, not by a separate UI validator.
 // Length means JavaScript string.length, preserving the existing UTF-16 limits.
@@ -7,15 +7,18 @@ export class ResponseValidator {
  private start:number;
  issues:ValidationIssue[];
  constructor(issues:ValidationIssue[]=[]){this.issues=issues;this.start=issues.length;}
- get valid(){return this.issues.length===this.start;}
- issue(path:string,code:ValidationIssue['code'],message:string,counts?:{actual:number;limit:number}){
-  this.issues.push({path,code,message,...counts,...(counts?{excess:Math.max(0,counts.actual-counts.limit)}:{})});
+ get valid(){return this.issues.slice(this.start).every(issue=>issue.severity==='warning');}
+ issue(path:string,code:ValidationIssue['code'],message:string,counts?:{actual:number;limit:number},severity:'warning'|'error'='error'){
+  this.issues.push({path,code,message,severity,...counts,...(counts?{excess:Math.max(0,counts.actual-counts.limit)}:{})});
  }
  text(value:unknown,path:string,max:number):value is string {
   if(typeof value!=='string'){this.issue(path,'invalid_type',`${path}: expected text.`);return false;}
   let valid=true;
   if(!value.trim()){this.issue(path,'invalid_value',`${path}: text must not be empty.`);valid=false;}
-  if(value.length>max){this.issue(path,'too_long',`${path}: ${value.length} characters; limit ${max}; ${value.length-max} over.`,{actual:value.length,limit:max});valid=false;}
+  if(value.length>max){
+   // Only prose fields are advisory. IDs, references and the total-response cap remain strict.
+   const warning=/^(revisedView|recommendation|rationale|(reviews|revisions)\[\d+\]\.reason|(risks|disagreements|nextSteps|openQuestions)\[\d+\]|claims\[\d+\]\.text)$/.test(path);
+   this.issue(path,'too_long',`${path}: ${value.length} characters; limit ${max}; ${value.length-max} over.`,{actual:value.length,limit:max},warning?'warning':'error');if(!warning)valid=false;}
   return valid;
  }
  array(value:unknown,path:string,max:number):value is any[] {
