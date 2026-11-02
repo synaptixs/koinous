@@ -17,7 +17,7 @@ W1–W6 uses new explicit product planning weights (not time estimates).
 | W6 Authorized live acceptance | 10% | User-authorized two/three-provider acceptance of revised workflow | Passed: bounded Codex/Claude idea-only subscription discussion; three-provider attempt failed on Grok timeout; broader live research unverified |
 
 Current overall and workflow track: 100% for the previously passed W1–W6 scope.
-Current task: unique peer instructions — review, implement, verify, document/deliver
+Current task: concise revision reasons — review, implement, verify, document/deliver
 (equal weights), 4/4 complete (100%); offline verified, prepared for PR delivery.
 W6 retains its prior two-provider pass; nine-response Grok acceptance is unpassed.
 The new smoke localized its wait to inference; backend/routing cause remains unknown.
@@ -42,6 +42,38 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### Concise revision reasons (2026-11-02)
+
+The authorized post-PR-3 discussion returned six responses with unique peer entries
+and four complete peer exchanges. Claude's final revision reason was 428 characters,
+28 above the unchanged 400 limit; the outcome remained insufficient. Original
+responses and diagnostics were preserved. No additional live attempt is authorized.
+
+Revision prompts now request one short sentence targeting at most 180 characters,
+explicitly distinguishing that drafting target from the 400 UTF-16-unit validation
+maximum. Supporting detail belongs in rationale and remaining dissent in disagreements,
+within their existing limits. Instructions require a per-reason check and substantial
+rewriting when length is uncertain. They retain unique peer entries and forbid
+mid-sentence cuts or missing required fields. The shared peer instruction now asks
+for a summary instead of cataloging every point. No parser, limit, response storage,
+repair, retry or provider configuration changed. Prompt compliance is not guaranteed.
+
+Measured pre-change PKG for composePrompt: one bound caller Engine.run; two touched
+nodes (module and caller); README and this plan referenced. No truncation; TypeScript
+unresolved calls are not tracked. Regression gaps flagged prepareDemo and
+preparePersonalDiscussion among five impacted symbols; their direct demo/setup tests
+remain in the full gate. Investigation also retrieved ignored run scripts, which
+were excluded from the change scope. Graph coverage is a floor, not exhaustive.
+
+Four new offline tests cover both providers' revision prompts, preserved peer text,
+the synthetic 428-character failure through the engine/report/events with six calls
+and an insufficient outcome, and unchanged ASCII/UTF-16 boundaries. The 180-character
+target does not tighten validation: 181 through 400 units remain valid.
+Verification passed: TypeScript, 491 Node tests and 33 Python tests. Evidence:
+ignored runs/revision-length/check.log.
+No model/authentication calls; inference disabled and Grok off. Enterprise hardening
+and PKG remain deferred. Live behavior of this change remains unverified.
 
 ### Unique peer declarations and demo readiness (2026-11-01)
 
