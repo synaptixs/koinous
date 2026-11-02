@@ -57,9 +57,9 @@ show unassessed coverage. No hidden fourth-model synthesis call is made.
 For the credential-free team walkthrough and clean GitHub handoff, see [DEMO.md](DEMO.md).
 
 ```bash
-cd /Users/falcon/projects/collab/collaborator
-npm test
-npm start
+git clone https://github.com/synaptixs/koinous.git
+cd koinous
+npm run demo
 ```
 
 Open **http://127.0.0.1:3030**. Enter a question; choose up to 3 rounds; press **Start discussion**. The text is explicitly mock-generated, not AI model output.
