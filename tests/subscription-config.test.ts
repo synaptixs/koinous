@@ -12,7 +12,7 @@ for (const roster of ['codex,claude', 'codex,grok', 'claude,grok', 'grok,claude,
     assert.deepEqual(createAdapters('real', ids).map(a => a.id), roster.split(','));
   });
 }
-for (const roster of ['', 'codex', 'codex,codex', 'codex,gemini', 'codex,claude,', 'codex,claude,grok,codex']) {
+for (const roster of ['', 'codex,codex', 'codex,gemini', 'codex,claude,', 'codex,claude,grok,codex']) {
   test(`rejects invalid roster before dispatch: ${roster}`, () => assert.throws(() => configuredProviders(roster), /at least two distinct/));
 }
 test('provider whitespace is normalized and unselected transports do not constrain a pair', t => {
@@ -67,3 +67,5 @@ test('disabled providers constrain defaults without changing historical structur
  assert.throws(()=>configuredProviders('codex,grok'),/disabled/);
  process.env.KOINOUS_DISABLED_PROVIDERS='unknown';assert.throws(()=>configuredProviders('codex,claude'),/Invalid/);
 });
+
+test('a single provider is configurable for distinct model participants',()=>{assert.deepEqual(configuredProviders('codex'),['codex']);});

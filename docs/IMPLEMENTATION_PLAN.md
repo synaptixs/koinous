@@ -20,8 +20,9 @@ Current overall and workflow track: 100% for the scoped W1–W6 gates. W6 passed
 on 2026-11-02 after the warning-policy correction; this is one successful bounded
 run, not proof of reliability for every idea or a production-readiness claim.
 Weights are unchanged; the final 10% moved only after verifying the live artifacts.
-Current task: one-command live-demo bundle — review, implement, verify, document
-(equal weights), 4/4 complete. Inference disabled, Grok off. Enterprise hardening and PKG
+Current task: same-provider model participants — review, implement, verify, document
+(equal weights), 4/4 complete. This is an offline extension; the existing W6 gate
+does not cover corporate authentication or live two-OpenAI-model inference. Inference disabled, Grok off. Enterprise hardening and PKG
 remain deferred and unestimated.
 
 Review: existing three-round orchestration already provides independent views,
@@ -43,6 +44,49 @@ and tests directly because lexical coverage is incomplete. New research/workflow
 helpers have no pre-change callers. No claim of exhaustive graph coverage.
 
 
+
+### Same-provider model participants (2026-11-02)
+
+Corporate OpenAI-only startup: `npm run demo:live -- --openai-only`. The launcher
+installs pinned packages, checks/reuses or obtains only ChatGPT/Codex subscription
+login, rechecks before live UI enablement, and disables Claude/Grok. No key fallback,
+workspace override, model probing or new inference is introduced during setup.
+Users choose two different allowed model IDs; account entitlement is unverified.
+
+Identity is now participant-specific. Historical IDs codex/claude/grok remain first
+slots; codex-2 and claude-2 have explicit provider ownership in participants.ts.
+The existing selection.providers/models wire names are retained, keyed by those
+participant IDs. There are still at most three participants, three rounds and nine
+calls. Same-provider pairs require nonempty different requested IDs (aliases cannot
+be resolved locally). Each has a fresh SDK conversation; peer declarations, usage,
+claims, reports, history filtering and reopening retain both identities. Disabled
+providers block all their slots. UI drafts can leave models blank, but dispatch
+validation is strict. Original saved responses and assessments are not rewritten.
+
+PKG-first investigation and pre-change measurements used main at 35f72ae. Bound
+caller counts: resolveSelection 5; configuredProviders 2; assertProvidersEnabled 3;
+composePrompt 1; participationLines 1; makeReport 2; Engine 7; parsePeerResponses 2;
+assessClaims 1; validClaimAssessment 1; SavedSessions 4; sessionSummary 2;
+historyPage 1; createApplication 4; callTimeoutMs 3; selection 1; refresh 5;
+openSaved 1. createAdapters (two matches), MockAdapter, demoLive and
+preparePersonalDiscussion had zero bound callers. Participant-related types had
+zero; the Selection/selection query also matched the UI function. Docs included
+README, the bundled-sample README and this implementation plan. No blast-radius result was truncated.
+JavaScript/TypeScript unresolved calls are not tracked: counts are a floor.
+Regression gaps flagged prepareDemo/preparePersonalDiscussion, UI refresh/finish/
+loadSavedList/openSaved/restoreSavedView, createAdapters and Grok launchBuild/run.
+Direct existing tests and new launcher/SDK/UI/API/workflow regressions cover these
+paths in the full offline gate; this is not exhaustive static coverage.
+
+Verification: TypeScript plus 511 Node and 33 Python tests passed. New coverage
+includes missing/duplicate model rejection, alias disablement, independent SDK
+threads and requested models, six replies with unique peer IDs and unknown costs,
+saved-original preservation, filtering by the second model, OpenAI-only auth
+commands, failure closure and UI selection/reopening. A mock browser discussion
+completed six replies and full peer coverage with codex/codex-2. No live login or
+model calls were made. Both inference flags remain disabled outside explicit live
+startup, and the temporary mock server was stopped after verification. Enterprise
+hardening and PKG remain deferred; existing roadmap weights are unchanged.
 
 ### One-command live demo (2026-11-02)
 

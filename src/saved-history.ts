@@ -1,3 +1,4 @@
+import {providerFor} from './participants.ts';
 import {AGENTS} from './core.ts';
 import type {AgentId} from './core.ts';
 import type {SavedSummary} from './saved-sessions.ts';
@@ -25,9 +26,9 @@ export function historyQuery(params:URLSearchParams){
 export function historyPage(summaries:SavedSummary[],query:ReturnType<typeof historyQuery>,unavailable:number,scanTruncated:boolean){
  const needle=query.q.normalize('NFKC').toLowerCase();
  const matches=summaries.filter(s=>{
-  if(query.provider&&!s.providers?.includes(query.provider))return false;
+  if(query.provider&&!s.providers?.some(id=>providerFor(id)===query.provider))return false;
   if(query.model){
-   const models=query.provider?[s.models?.[query.provider]]:Object.values(s.models??{});
+   const models=query.provider?(s.providers??[]).filter(id=>providerFor(id)===query.provider).map(id=>s.models?.[id]):Object.values(s.models??{});
    if(!models.includes(query.model))return false;
   }
   const time=Date.parse(s.createdAt);

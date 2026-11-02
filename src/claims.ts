@@ -1,10 +1,12 @@
+import {PARTICIPANTS} from './participants.ts';
+import type {ParticipantId} from './participants.ts';
 import {ResponseValidator} from './response-validation.ts';
 import type {ValidationIssue} from './response-validation.ts';
-import type {AgentId, Evidence} from './core.ts';
+import type { Evidence} from './core.ts';
 
 export type Claim = {id:string;kind:'fact'|'assumption'|'proposal';text:string;evidenceIds:string[];snapshotId:string|null};
-export type ClaimCheck = {agent:AgentId;claim:Claim;status:'unsupported'|'reference-valid-unverified'|'assumption'|'proposal';issues:string[]};
-export type ClaimAssessment = {version:1;declaredBy:AgentId[];unassessed:AgentId[];checks:ClaimCheck[];scope:string};
+export type ClaimCheck = {agent:ParticipantId;claim:Claim;status:'unsupported'|'reference-valid-unverified'|'assumption'|'proposal';issues:string[]};
+export type ClaimAssessment = {version:1;declaredBy:ParticipantId[];unassessed:ParticipantId[];checks:ClaimCheck[];scope:string};
 export const CLAIM_SCOPE='Only declared final-round claims are checked. Free prose, omitted claims and earlier rounds are not exhaustively extracted or fact-checked. Resolved references establish availability, not entailment or truth; user context and peer agreement are not independent evidence.';
 
 export function parseClaims(value:unknown,issues:ValidationIssue[]=[]):Claim[]|null {
@@ -28,7 +30,7 @@ export function parseClaims(value:unknown,issues:ValidationIssue[]=[]):Claim[]|n
  return value.map(c=>({id:c.id,kind:c.kind,text:c.text.trim(),evidenceIds:[...c.evidenceIds],snapshotId:c.snapshotId}));
 }
 
-export function assessClaims(agent:AgentId,claims:Claim[],evidence?:Evidence):ClaimCheck[]{
+export function assessClaims(agent:ParticipantId,claims:Claim[],evidence?:Evidence):ClaimCheck[]{
  return claims.map(claim=>{
   const issues:string[]=[];
   if(claim.kind==='fact'&&!claim.evidenceIds.length)issues.push('Unsupported factual claim: no evidence references supplied.');
@@ -54,7 +56,7 @@ export function assessClaims(agent:AgentId,claims:Claim[],evidence?:Evidence):Cl
 export function validClaimAssessment(value:unknown):value is ClaimAssessment {
  if(!value||typeof value!=='object')return false;
  const a=value as ClaimAssessment;
- const roster=(v:unknown):v is AgentId[]=>Array.isArray(v)&&v.length<=3&&new Set(v).size===v.length&&v.every(x=>['codex','claude','grok'].includes(x));
+ const roster=(v:unknown):v is ParticipantId[]=>Array.isArray(v)&&v.length<=3&&new Set(v).size===v.length&&v.every(x=>PARTICIPANTS.includes(x));
  if(a.version!==1||typeof a.scope!=='string'||!a.scope.trim()||a.scope.length>1000||!roster(a.declaredBy)||!roster(a.unassessed)||a.declaredBy.some(x=>a.unassessed.includes(x))||!Array.isArray(a.checks)||a.checks.length>24)return false;
  const ids=new Set<string>();
  return a.checks.every(c=>{

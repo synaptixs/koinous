@@ -1,9 +1,11 @@
+import {PARTICIPANTS} from './participants.ts';
+import type {ParticipantId} from './participants.ts';
 import {ResponseValidator} from './response-validation.ts';
 import type {ValidationIssue,ResponseValidation} from './response-validation.ts';
-import type {AgentId,Session} from './core.ts';
+import type {Session} from './core.ts';
 import {parsePosition} from './discussion-outcome.ts';
 import {RESEARCH_SCOPE} from './research.ts';
-export type PeerResponse={peer:AgentId;decision:'adopted'|'rejected'|'unresolved';reason:string};
+export type PeerResponse={peer:ParticipantId;decision:'adopted'|'rejected'|'unresolved';reason:string};
 export function parsePeerResponses(value:unknown,issues:ValidationIssue[]=[],path='reviews'):PeerResponse[]|null {
  const v=new ResponseValidator(issues);
  if(!v.array(value,path,2))return null;
@@ -11,16 +13,16 @@ export function parsePeerResponses(value:unknown,issues:ValidationIssue[]=[],pat
  for(const [i,p] of value.entries()){
   const at=`${path}[${i}]`;
   if(!v.record(p,at,['peer','decision','reason']))continue;
-  v.choice(p.peer,at+'.peer',['codex','claude','grok']);
+  v.choice(p.peer,at+'.peer',PARTICIPANTS);
   v.choice(p.decision,at+'.decision',['adopted','rejected','unresolved']);
   v.text(p.reason,at+'.reason',400);
-  if(peers.has(p.peer))v.issue(at+'.peer','duplicate',`${at}.peer: duplicate provider.`);
+  if(peers.has(p.peer))v.issue(at+'.peer','duplicate',`${at}.peer: duplicate participant.`);
   peers.add(p.peer);
  }
  if(!v.valid)return null;
  return value.map(p=>({peer:p.peer,decision:p.decision,reason:p.reason.trim()}));
 }
-export const REVIEW_INSTRUCTIONS='Return JSON only: {"reviews":[{"peer":"provider ID","decision":"adopted|rejected|unresolved","reason":"specific argument or evidence and your response"}],"revisedView":"your updated recommendation","openQuestions":["remaining question"]}. Include one review for each supplied peer, never yourself. At most two reviews, reasons up to 400 characters, revisedView up to 1200, up to five questions of 400 characters. Limit the complete response to 5000 characters. Do not merely list provider names.';
+export const REVIEW_INSTRUCTIONS='Return JSON only: {"reviews":[{"peer":"participant ID","decision":"adopted|rejected|unresolved","reason":"specific argument or evidence and your response"}],"revisedView":"your updated recommendation","openQuestions":["remaining question"]}. Include one review for each supplied peer, never yourself. At most two reviews, reasons up to 400 characters, revisedView up to 1200, up to five questions of 400 characters. Limit the complete response to 5000 characters. Do not merely list provider names.';
 export function parseReview(text:string,issues:ValidationIssue[]=[]) {
  const v=new ResponseValidator(issues),p=v.json(text,5000);
  if(!v.valid||!v.record(p,'response',['reviews','revisedView','openQuestions']))return null;

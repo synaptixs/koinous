@@ -1,8 +1,11 @@
-import {AGENTS} from './core.ts';
+import {PARTICIPANTS,providerFor,validateParticipants} from './participants.ts';
+import type {ParticipantId} from './participants.ts';
 import type {AgentId} from './core.ts';
-import {configuredProviders, validateProviders} from './provider-config.ts';
+import {configuredProviders} from './provider-config.ts';
 
-export type Selection = Readonly<{providers: readonly AgentId[]; models: Readonly<Partial<Record<AgentId, string>>>}>;
+// Legacy wire names are retained: providers contains participant IDs, and models
+// is keyed by those IDs. Provider ownership is defined in participants.ts.
+export type Selection = Readonly<{providers: readonly ParticipantId[]; models: Readonly<Partial<Record<ParticipantId, string>>>}>;
 
 function modelId(value: unknown): string {
   if (typeof value !== 'string' || value.length > 128 || (value !== '' && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value))) {
@@ -15,23 +18,34 @@ export function modelDefaults(env: NodeJS.ProcessEnv = process.env): Record<Agen
   return {codex: modelId(env.CODEX_MODEL || ''), claude: modelId(env.CLAUDE_MODEL || ''), grok: modelId(env.GROK_BUILD_MODEL || 'grok-4.7')};
 }
 
-export function resolveSelection(input: unknown, defaults: Selection = {providers: configuredProviders(), models: modelDefaults()}): Selection {
+export function defaultParticipants():ParticipantId[] {
+  const providers=configuredProviders();
+  return providers.length===1&&providers[0]!=='grok'?[providers[0],providers[0]==='codex'?'codex-2':'claude-2']:providers;
+}
+
+// Only server UI defaults may contain unfinished model choices. Dispatch and
+// saved-session validation always use the strict default (false).
+export function resolveSelection(input: unknown, defaults: Selection = {providers: defaultParticipants(), models: modelDefaults()}, allowUnspecifiedModels=false): Selection {
   if (input === undefined) input = {providers: defaults.providers};
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Selection must contain providers and optional models');
   const obj = input as Record<string, unknown>;
   if (Object.keys(obj).some(key => !['providers', 'models'].includes(key))) throw new Error('Selection accepts only providers and models; authentication is fixed to subscription login');
-  if (!Array.isArray(obj.providers) || obj.providers.some(id => typeof id !== 'string')) throw new Error('Select at least two distinct providers');
-  const providers = validateProviders(obj.providers);
+  if (!Array.isArray(obj.providers) || obj.providers.some(id => typeof id !== 'string')) throw new Error('Select at least two distinct participants');
+  const providers = validateParticipants(obj.providers);
   const requested = obj.models === undefined ? {} : obj.models;
-  if (!requested || typeof requested !== 'object' || Array.isArray(requested)) throw new Error('Models must be keyed by selected provider');
-  const models: Partial<Record<AgentId, string>> = {};
+  if (!requested || typeof requested !== 'object' || Array.isArray(requested)) throw new Error('Models must be keyed by selected participant');
+  const models: Partial<Record<ParticipantId, string>> = {};
   for (const [id, value] of Object.entries(requested)) {
-    if (!AGENTS.includes(id as AgentId) || !providers.includes(id as AgentId)) throw new Error('Model overrides must belong to selected providers');
+    if (!PARTICIPANTS.includes(id as ParticipantId) || !providers.includes(id as ParticipantId)) throw new Error('Model overrides must belong to selected participants');
     modelId(value);
   }
   for (const id of providers) {
     const requestedModel = (requested as Record<string, unknown>)[id];
     models[id] = modelId(requestedModel === undefined || requestedModel === '' ? defaults.models[id] || '' : requestedModel);
+  }
+  for(const id of providers) {
+    const peers=providers.filter(other=>other!==id&&providerFor(other)===providerFor(id));
+    if(peers.length&&((!allowUnspecifiedModels&&(!models[id]||peers.some(other=>!models[other])))||peers.some(other=>models[id]&&models[other]===models[id])))throw Error('Participants using the same provider require two explicit, different model IDs');
   }
   return Object.freeze({providers: Object.freeze(providers), models: Object.freeze(models)});
 }

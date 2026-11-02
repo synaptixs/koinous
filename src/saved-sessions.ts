@@ -1,15 +1,16 @@
+import {PARTICIPANTS} from './participants.ts';
+import type {ParticipantId} from './participants.ts';
 import {validBudgetState} from './budgets.ts';
 import {validClaimAssessment} from './claims.ts';
 import {closeSync,constants,fstatSync,lstatSync,openSync,readFileSync,readdirSync,realpathSync} from 'node:fs';
 import {join,relative,isAbsolute} from 'node:path';
-import type {Event,Session,AgentId} from './core.ts';
-import {AGENTS} from './core.ts';
+import type {Event,Session} from './core.ts';
 import {resolveSelection} from './selection.ts';
 import {parsePosition} from './discussion-outcome.ts';
 
 export const SESSION_ID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 export const TERMINAL=new Set(['completed','partial','failed','cancelled']);
-export type SavedSummary={id:string;prompt:string;status:string;createdAt:string;calls:number;providers?:readonly AgentId[];models?:Partial<Record<AgentId,string>>};
+export type SavedSummary={id:string;prompt:string;status:string;createdAt:string;calls:number;providers?:readonly ParticipantId[];models?:Partial<Record<ParticipantId,string>>};
 export function sessionSummary(s:Session):SavedSummary{return {id:s.id,prompt:s.prompt,status:s.status,createdAt:s.events[0]?.at||'',calls:s.calls,providers:s.selection?.providers??s.participants,models:s.selection?.models};}
 function requireValue(value:unknown):asserts value {if(!value)throw Error('Invalid saved session');}
 
@@ -51,21 +52,21 @@ export class SavedSessions {
   requireValue(first.maxRounds===1||first.maxRounds===2||first.maxRounds===3);
   if(last.budget!==undefined)requireValue(validBudgetState(last.budget));
   const entries=events.filter(e=>e.type==='agent.completed');
-  requireValue(entries.length<=9&&entries.every(e=>AGENTS.includes(e.agent as never)&&[1,2,3].includes(Number(e.round))&&typeof e.text==='string'));
+  requireValue(entries.length<=9&&entries.every(e=>PARTICIPANTS.includes(e.agent as never)&&[1,2,3].includes(Number(e.round))&&typeof e.text==='string'));
   requireValue(new Set(entries.map(e=>`${e.agent}:${e.round}`)).size===entries.length);
   const assessed=events.find(e=>e.type==='discussion.assessed');
   if(assessed){
    const o=assessed.outcome as Session['outcome'];
    requireValue(o&&['agreement','direction-alignment','majority-direction','split','insufficient'].includes(o.status));
    requireValue(typeof o.recommendation==='string'&&typeof o.caveat==='string'&&o.coverage&&Number.isInteger(o.coverage.valid)&&Number.isInteger(o.coverage.expected));
-   requireValue(Array.isArray(o.positions)&&o.positions.every(p=>p&&AGENTS.includes(p.agent)&&parsePosition(JSON.stringify(p.position))));
+   requireValue(Array.isArray(o.positions)&&o.positions.every(p=>p&&PARTICIPANTS.includes(p.agent)&&parsePosition(JSON.stringify(p.position))));
    if(o.claimAssessment!==undefined)requireValue(validClaimAssessment(o.claimAssessment));
-   requireValue(Array.isArray(o.supporters)&&o.supporters.every(a=>AGENTS.includes(a)));
+   requireValue(Array.isArray(o.supporters)&&o.supporters.every(a=>PARTICIPANTS.includes(a)));
    requireValue(Array.isArray(o.nextSteps)&&o.nextSteps.every(x=>typeof x==='string'));
-   requireValue(Array.isArray(o.unresolved)&&o.unresolved.every(x=>x&&AGENTS.includes(x.agent)&&typeof x.text==='string'));
+   requireValue(Array.isArray(o.unresolved)&&o.unresolved.every(x=>x&&PARTICIPANTS.includes(x.agent)&&typeof x.text==='string'));
   }
   const configured=events.find(e=>e.type==='participants.configured');
-  if(configured?.agents)requireValue(Array.isArray(configured.agents)&&configured.agents.length<=3&&configured.agents.every(a=>AGENTS.includes(a))&&new Set(configured.agents).size===configured.agents.length);
+  if(configured?.agents)requireValue(Array.isArray(configured.agents)&&configured.agents.length<=3&&configured.agents.every(a=>PARTICIPANTS.includes(a))&&new Set(configured.agents).size===configured.agents.length);
   if(configured?.selection)resolveSelection(configured.selection,configured.selection as NonNullable<Session['selection']>);
   requireValue(entries.length<=Number(last.calls));
   const grounding=events.find(e=>e.type==='grounding.pinned');

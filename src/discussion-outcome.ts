@@ -1,15 +1,16 @@
+import type {ParticipantId} from './participants.ts';
 import {ResponseValidator} from './response-validation.ts';
 import type {ValidationIssue} from './response-validation.ts';
 import {parsePeerResponses} from './discussion-workflow.ts';
 import type {PeerResponse} from './discussion-workflow.ts';
 import {parseClaims,assessClaims,CLAIM_SCOPE} from './claims.ts';
 import type {Claim,ClaimAssessment} from './claims.ts';
-import type {AgentId,Session} from './core.ts';
+import type {Session} from './core.ts';
 export const DIRECTIONS=['proceed','revise','pilot','defer','reject'] as const;
 export type Position={revisions?:PeerResponse[];claims?:Claim[];direction:typeof DIRECTIONS[number];recommendation:string;rationale:string;risks:string[];disagreements:string[];nextSteps:string[]};
-export type Outcome={claimAssessment?:ClaimAssessment;status:'agreement'|'direction-alignment'|'majority-direction'|'split'|'insufficient';coverage:{valid:number;expected:number};positions:Array<{agent:AgentId;position:Position}>;missing:AgentId[];invalid:AgentId[];direction:Position['direction']|null;recommendation:string;proposalBy:AgentId|null;supporters:AgentId[];unresolved:Array<{agent:AgentId;text:string}>;nextSteps:string[];caveat:string};
+export type Outcome={claimAssessment?:ClaimAssessment;status:'agreement'|'direction-alignment'|'majority-direction'|'split'|'insufficient';coverage:{valid:number;expected:number};positions:Array<{agent:ParticipantId;position:Position}>;missing:ParticipantId[];invalid:ParticipantId[];direction:Position['direction']|null;recommendation:string;proposalBy:ParticipantId|null;supporters:ParticipantId[];unresolved:Array<{agent:ParticipantId;text:string}>;nextSteps:string[];caveat:string};
 export const FINAL_POSITION_INSTRUCTIONS=`Return only a JSON object (no prose) with exactly these keys:
-{"revisions":[{"peer":"provider ID","decision":"adopted|rejected|unresolved","reason":"how this peer critique changed your view, or why it did not"}],"direction":"proceed|revise|pilot|defer|reject","recommendation":"one concrete recommended course of action","rationale":"why, with assumptions identified","risks":["remaining risk"],"disagreements":["specific unresolved disagreement, or empty array"],"nextSteps":["concrete next action"],"claims":[{"id":"c1","kind":"fact|assumption|proposal","text":"one material claim","evidenceIds":[],"snapshotId":null}]}.
+{"revisions":[{"peer":"participant ID","decision":"adopted|rejected|unresolved","reason":"how this peer critique changed your view, or why it did not"}],"direction":"proceed|revise|pilot|defer|reject","recommendation":"one concrete recommended course of action","rationale":"why, with assumptions identified","risks":["remaining risk"],"disagreements":["specific unresolved disagreement, or empty array"],"nextSteps":["concrete next action"],"claims":[{"id":"c1","kind":"fact|assumption|proposal","text":"one material claim","evidenceIds":[],"snapshotId":null}]}.
 Include one revisions entry for each peer whose critique you received, never yourself; at most two entries, each reason at most 400 characters. Explain concrete changes or why you retain your position. Next steps should include an owner or role, an observable success criterion and a stop/revisit condition. Include all material factual premises as claims; do not hide them in rationale. Use kind fact for factual assertions, assumption for unverified premises, proposal for suggested actions. Cite only supplied evidence IDs and their exact snapshotId; otherwise use [] and null. Up to eight claims, each text at most 600 characters, ID 1–40 letters/digits/underscore/hyphen, up to five evidence IDs of 200 characters, snapshotId at most 200 characters. Use claims: [] only when there are no material claims. Choose one direction value. Limit the complete response to 12000 characters. Limit recommendation and rationale to 1200 characters each; risks, disagreements and nextSteps to five strings of 400 characters each. Do not claim other providers endorse your wording. Preserve uncertainty and disagreement; agreement is not a correctness guarantee.`;
 export function parsePosition(text:string,issues:ValidationIssue[]=[]):Position|null {
  const v=new ResponseValidator(issues),p=v.json(text,12000);
@@ -27,7 +28,7 @@ export function parsePosition(text:string,issues:ValidationIssue[]=[]):Position|
 const normalized=(s:string)=>s.trim().replace(/\s+/g,' ').toLowerCase();
 export function assessDiscussion(s:Session):Outcome{
  const roster=[...new Set(s.participants??s.selection?.providers??[])];
- const positions:Outcome['positions']=[],missing:AgentId[]=[],invalid:AgentId[]=[];
+ const positions:Outcome['positions']=[],missing:ParticipantId[]=[],invalid:ParticipantId[]=[];
  for(const agent of roster){
   const entries=s.entries.filter(e=>e.agent===agent&&e.round===3);
   if(!entries.length){missing.push(agent);continue;}

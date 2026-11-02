@@ -1,16 +1,17 @@
+import {PARTICIPANTS,providerFor} from './participants.ts';
 import {workflowAssessment,responseValidation} from './discussion-workflow.ts';
 import {createServer} from 'node:http';
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {pathToFileURL} from 'node:url';
 import {historyQuery,historyPage} from './saved-history.ts';
 import {SavedSessions,sessionSummary,TERMINAL} from './saved-sessions.ts';
-import {modelDefaults, resolveSelection} from './selection.ts';
+import {modelDefaults, resolveSelection, defaultParticipants} from './selection.ts';
 import type {Selection} from './selection.ts';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {Engine} from './engine.ts';
 import {createAdapters} from './adapters.ts';
-import {configuredProviders,enabledProviders,assertProvidersEnabled} from './provider-config.ts';
+import {enabledProviders,assertProvidersEnabled} from './provider-config.ts';
 import {usageSummary} from './provider-runtime.ts';
 import {boundedInt,makeReport,originalMarkdown} from './core.ts';
 
@@ -19,9 +20,9 @@ const port=options.port ?? boundedInt(process.env.PORT,3030,1,65535);
 const host='127.0.0.1';
 const mode=options.mode || process.env.MODE || 'mock';
 if(!['mock','real'].includes(mode))throw new Error('MODE must be mock or real');
-const initial=options.defaults ?? {providers: configuredProviders(), models: modelDefaults()};
+const initial:Selection=options.defaults ?? {providers: defaultParticipants(), models: modelDefaults()};
 const defaults=Object.freeze({providers:Object.freeze([...initial.providers]),models:Object.freeze({...initial.models})});
-const providers=[...resolveSelection(undefined,defaults).providers];
+const providers=[...resolveSelection(undefined,defaults,true).providers];
 assertProvidersEnabled(providers);
 const factory=options.adapterFactory ?? createAdapters;
 const outputDir=options.outputDir ?? resolve('runs');
@@ -41,7 +42,7 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
     if(req.method==='POST'&&req.headers.origin){const origin=new URL(req.headers.origin);if(!(['localhost','127.0.0.1'].includes(origin.hostname)&&Number(origin.port)===port)){return json(res,403,{error:'Origin denied'});}}
     if(req.method==='GET'&&url.pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'"});return res.end(html);}
     if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(script);}
-    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[id],defaultModel:defaults.models[id] || ''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
+    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
     if(req.method==='GET'&&url.pathname==='/api/sessions'){
       const query=historyQuery(url.searchParams);
       const found=saved.list();

@@ -1,20 +1,53 @@
 # Koinous — shared inquiry
 
-> **Current product direction (2026-11-01):** discuss an idea with two or three subscription providers, exchange critiques, and produce one recommendation with explicit agreement and unresolved dissent. An idea alone is sufficient; optional context is supported. The active roadmap is W1–W6 in docs/IMPLEMENTATION_PLAN.md. Enterprise hardening and PKG are deferred. Earlier P0–P6 and PKG sections below are historical/optional engineering work, not prerequisites.
+> **Current product direction (2026-11-01):** discuss an idea with two or three model participants using subscription login, exchange critiques, and produce one recommendation with explicit agreement and unresolved dissent. An idea alone is sufficient; optional context is supported. The active roadmap is W1–W6 in docs/IMPLEMENTATION_PLAN.md. Enterprise hardening and PKG are deferred. Earlier P0–P6 and PKG sections below are historical/optional engineering work, not prerequisites.
 >
 > **Current safety state:** `KOINOUS_ENABLE_INFERENCE=0` blocks real API discussion starts; `GROK_BUILD_ENABLE_INFERENCE=0` remains unchanged. Mock mode still works. The revised final-position workflow is offline-tested; live validation is pending separate authorization.
 
 **Koinous** is a coined project name evoking shared thought: independent perspectives working toward understanding while preserving dissent. The POC lives in `collaborator/`. This is a working name, not a claim of trademark or domain availability.
 
-Available providers: **OpenAI (Codex), Anthropic (Claude), and xAI (Grok Build)**. Configure any two or all three; subscription login is the application authentication path, with no API-key fallback. Gemini follows after these adapters are validated; Ollama is a possible later local-model backend. Existing agent IDs (`codex`, `claude`, `grok`) and environment variables remain stable.
+Available providers: **OpenAI (Codex), Anthropic (Claude), and xAI (Grok Build)**. Choose two or three participants; OpenAI and Claude each support two different models under one provider login; subscription login is the application authentication path, with no API-key fallback. Gemini follows after these adapters are validated; Ollama is a possible later local-model backend. Existing agent IDs (`codex`, `claude`, `grok`) and environment variables remain stable.
 
 A local-first, read-only, three-round discussion orchestrator with a live browser transcript, user interventions, optional evidence, and audit files. It supports **mock** (no dependencies or credentials) and **real** provider modes.
 
 > **Status:** The mock-mode end-to-end workflow and unit tests have been executed successfully. Live connectivity smoke tests have run: OpenAI and Anthropic returned the expected marker; Grok initially declined the exact-marker instruction, then passed the revised low-reasoning semantic test with the answer `4.` in one request. A bounded live three-provider discussion subsequently passed all nine responses across three rounds; peer routing, usage reconciliation, and saved report checks passed. MCP remains untested. This is a POC, **not** a production security boundary.
 
+## OpenAI-only corporate demo
+
+If your team uses only corporate ChatGPT/Codex access, run:
+
+```sh
+npm run demo:live -- --openai-only
+```
+
+This installs pinned dependencies and reuses your local ChatGPT login or opens
+Codex's browser login flow when needed. Sign in with your approved corporate
+account. It checks only Codex; Claude and Grok are disabled, with no API-key
+fallback. An existing login is reused, so confirm it is the intended corporate
+account before starting. Koinous does not select an enterprise workspace for you.
+
+In the UI, enter **two different model IDs** available through that account,
+one for each OpenAI participant. Keep three rounds for six responses: initial
+analysis, peer review, and revised recommendations. Each participant has a separate
+conversation, peer identity, selected model and accounting. Both use the same
+local subscription login. Start discussion sends prompts; setup sends none.
+Stop with Ctrl+C when finished.
+
+Your organization must allow Codex and both requested models. Login status is
+not an entitlement or quota check. No model list is invented or automatically
+probed, and a rejected model stops the discussion without fallback or retries.
+Different requested IDs can be aliases; Koinous cannot prove distinct underlying
+models when the provider does not report their resolved identities. Two models
+from one provider are not independent evidence of correctness. Subscription USD
+costs remain unknown when the SDK supplies no cost.
+
+This path is verified offline and in the mock UI. Corporate authentication and
+live two-OpenAI-model inference have not been tested. The earlier live acceptance
+covers Codex plus Claude, not this new combination.
+
 ## Idea discussion workflow
 
-1. Enter an idea, optional context, and choose at least two subscription providers/models.
+1. Enter an idea, optional context, and choose two or three model participants (including two different OpenAI models).
 2. Optionally choose **Wikipedia background sources** and enter public topic keywords.
    Only these keywords are sent to the fixed Wikipedia endpoint; the private idea and
    context are not used as the search query. Retrieval is one request, ten seconds,

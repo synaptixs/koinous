@@ -6,10 +6,19 @@ KOINOUS POC — ONE-COMMAND LIVE DEMO
 
    npm run demo:live
 
+   OPENAI-ONLY CORPORATE ACCESS (no Claude login):
+   npm run demo:live -- --openai-only
+
 The command installs pinned dependencies (internet required), checks your existing
 Codex and Claude subscription logins, opens missing provider login flows, then
 starts the live UI. Complete browser sign-ins with your own ChatGPT and Claude
 subscription accounts. No API-key fallback; Grok stays off. Do not share credentials.
+
+With --openai-only, only your ChatGPT/Codex login is checked. Use your approved
+corporate account; an existing local login is reused. Claude and Grok stay off.
+Enter two different OpenAI model IDs in the UI, one per participant. Your
+organization must allow Codex and both models. Login status does not prove model
+access. Corporate login and this two-model live path are not yet live-tested.
 
 Open the localhost URL printed in the terminal (normally http://127.0.0.1:3030).
 Select models available to your subscriptions. Last tested: Codex gpt-6-astra and

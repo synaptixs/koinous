@@ -13,7 +13,7 @@ import {getEvidence} from './grounding.ts';
 
 import {resolveSelection} from './selection.ts';
 import type {Selection} from './selection.ts';
-import {validateProviders} from './provider-config.ts';
+import {validateParticipants,providerFor} from './participants.ts';
 const MAX_USD=Number(process.env.MAX_SESSION_USD || '3');
 export class Engine extends EventEmitter {
   sessions=new Map<string,Session>();
@@ -61,7 +61,7 @@ export class Engine extends EventEmitter {
       if(s.cancel.signal.aborted)throw new Error('Cancelled');
       adapters=this.createAdapters(s);
       if(s.selection && (adapters.length!==s.selection.providers.length || adapters.some((a,i)=>a.id!==s.selection!.providers[i])))throw new Error('Adapter roster differs from session selection');
-      s.participants=validateProviders(adapters.map(a=>a.id));
+      s.participants=validateParticipants(adapters.map(a=>a.id));
       const maxCalls=Math.min(s.budgetPolicy!.maxCalls,s.participants.length*s.maxRounds);
       ledger=new BudgetLedger({...s.budgetPolicy!,maxCalls});s.budget=ledger.snapshot();
       this.emitEvent(s,'participants.configured',{agents:s.participants,maxCalls,selection:s.selection});
@@ -70,7 +70,7 @@ export class Engine extends EventEmitter {
         this.emitEvent(s,'budget.denied',{reason:preflight.reason,budget:s.budget});
         throw new ProviderFailure('budget_denied','Budget preflight refused dispatch before runtime preparation');
       }
-      const timeouts = new Map(adapters.map(a => [a.id, callTimeoutMs(a.id)]));
+      const timeouts = new Map(adapters.map(a => [a.id, callTimeoutMs(providerFor(a.id))]));
       if(s.research){
         this.emitEvent(s,'research.started',{query:s.research.query});
         s.evidence=await this.researcher(s.research,s.cancel.signal);

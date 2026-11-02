@@ -1,16 +1,18 @@
+import {validateParticipants,providerFor} from './participants.ts';
+import type {ParticipantId} from './participants.ts';
 import {ManagedGrokBuildAdapter} from './grok-managed.ts';
 import {GrokBuildAdapter} from './grok-build.ts';
-import {configuredProviders, validateProviders, subscriptionEnvironment} from './provider-config.ts';
+import {subscriptionEnvironment} from './provider-config.ts';
 import type {Selection} from './selection.ts';
-import {resolveSelection} from './selection.ts';
+import {resolveSelection,defaultParticipants} from './selection.ts';
 import {codexUsage} from './codex-usage.ts';
 import type {Adapter, AgentId, Reply, Round, Usage} from './core.ts';
 
 // Mock mode uses deterministic stand-ins, NOT AI model outputs. No external packages required.
 export class MockAdapter implements Adapter {
   readonly maxTotalTokensPerCall=0; // No inference occurs in deterministic mock mode.
-  id: AgentId;
-  constructor(id: AgentId) { this.id=id; }
+  id: ParticipantId;
+  constructor(id: ParticipantId) { this.id=id; }
   async run(prompt: string, round: Round, signal: AbortSignal): Promise<Reply> {
     await new Promise<void>((resolve,reject)=>{
       const t=setTimeout(resolve, this.id==='codex'?400:this.id==='claude'?650:900);
@@ -19,10 +21,10 @@ export class MockAdapter implements Adapter {
     if (signal.aborted) throw new Error('Cancelled');
     const topic=(prompt.match(/PROBLEM:\n([^\n]+)/)?.[1] || 'the technical question').slice(0,160);
     const peerSection=prompt.split('OTHER AGENTS LAST ROUND:\n')[1]?.split('\n\nROUND ')[0]??'';
-    const peers=([...peerSection.matchAll(/^(CODEX|CLAUDE|GROK):/gm)].map(m=>m[1].toLowerCase()) as AgentId[]).filter(id=>id!==this.id);
+    const peers=([...peerSection.matchAll(/^(CODEX(?:-2)?|CLAUDE(?:-2)?|GROK):/gm)].map(m=>m[1].toLowerCase()) as ParticipantId[]).filter(id=>id!==this.id);
     const reviews=[...new Set(peers)].map(peer=>({peer,decision:'unresolved',reason:'Mock critique: compare the proposed pilot against workload and service-quality evidence.'}));
     const views: Record<AgentId,string>={codex:'implementation boundaries, testability, and integration cost', claude:'architecture tradeoffs, operational risk, and maintainability',grok:'counterexamples, hidden assumptions, and alternative approaches'};
-    return {text: round===1?`**Mock ${this.id} independent position:** For “${topic}”, prioritize ${views[this.id]}.\n\n- Hypothesis: run a small controlled experiment first.\n- Evidence status: demonstration only; no actual model inference.\n- Next step: define acceptance tests and compare options.`
+    return {text: round===1?`**Mock ${this.id} independent position:** For “${topic}”, prioritize ${views[providerFor(this.id)]}.\n\n- Hypothesis: run a small controlled experiment first.\n- Evidence status: demonstration only; no actual model inference.\n- Next step: define acceptance tests and compare options.`
      :round===2?JSON.stringify({reviews,revisedView:'Mock revised view: use a reversible pilot with a stop condition.',openQuestions:['What evidence would justify a wider rollout?']})
 :JSON.stringify({revisions:reviews,direction:'pilot',recommendation:`Run a small reversible pilot of “${topic}” before committing.`,rationale:'Illustrative mock recommendation; validate assumptions with actual users.',risks:['Demand and feasibility remain untested.'],disagreements:['The evidence needed for a full commitment remains unresolved.'],claims:[{id:'a1',kind:'assumption',text:'A limited pilot can test demand and feasibility.',evidenceIds:[],snapshotId:null}],nextSteps:['Define a success criterion and a limited pilot.','Review results before a wider rollout.']}),usage:{inputTokens:0,outputTokens:0,usd:0}};
   }
@@ -142,12 +144,20 @@ export class GrokAdapter implements Adapter {
     return {text: content, ...details};
   }
 }
-export function createAdapters(mode: string, providers: readonly AgentId[] = configuredProviders(), models?: Selection['models']): Adapter[] {
-  const roster = validateProviders(providers);
+export function createAdapters(mode: string, providers: readonly ParticipantId[] = defaultParticipants(), models?: Selection['models']): Adapter[] {
+  const roster = validateParticipants(providers);
   const selection = models === undefined ? resolveSelection({providers: roster}) : resolveSelection({providers: roster, models}, {providers: roster, models});
   if (!['mock', 'real'].includes(mode)) throw new ProviderFailure('configuration', 'MODE must be mock or real');
   if (mode === 'real' && roster.includes('grok') && (process.env.GROK_TRANSPORT || 'build') !== 'build') {
     throw new ProviderFailure('configuration', 'Subscription mode requires GROK_TRANSPORT=build; API-key fallback is disabled');
   }
-  return roster.map(id => mode === 'mock' ? new MockAdapter(id) : id === 'codex' ? new CodexAdapter(undefined, selection.models[id]) : id === 'claude' ? new ClaudeAdapter(undefined, selection.models[id]) : ((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm' ? new ManagedGrokBuildAdapter(selection.models[id]) : new GrokBuildAdapter(selection.models[id])));
+  return roster.map(id => {
+    if(mode==='mock')return new MockAdapter(id);
+    const provider=providerFor(id);
+    // One fresh SDK adapter (and therefore conversation) per participant. Only
+    // authentication is shared; each call retains its own selected model/usage.
+    const adapter:Adapter=provider==='codex'?new CodexAdapter(undefined,selection.models[id]):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id]):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
+    if(id===provider)return adapter;
+    return {id,maxTotalTokensPerCall:adapter.maxTotalTokensPerCall,run:adapter.run.bind(adapter),...(adapter.prepare?{prepare:adapter.prepare.bind(adapter)}:{}),...(adapter.dispose?{dispose:adapter.dispose.bind(adapter)}:{})};
+  });
 }

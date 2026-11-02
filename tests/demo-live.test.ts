@@ -44,3 +44,11 @@ test('subprocess environment strips API routing and live flags; output and time 
  await assert.rejects(runDemoCommand({file:process.execPath,args:['-e','setInterval(()=>{},1000)'],capture:true,timeoutMs:50},new AbortController().signal));
  }finally{for(const k of Object.keys(process.env))if(!(k in old))delete process.env[k];Object.assign(process.env,old);}
 });
+
+test('OpenAI-only launch authenticates only Codex and passes mode to guarded startup',async()=>{
+ const calls:DemoCommand[]=[];let status=0;
+ await demoLive(['--openai-only'],{...opts,run:async c=>{calls.push(c);if(isStatus(c))return status++?ready(c):{...ok,code:1};return ok;}});
+ assert.equal(calls.filter(isLogin).length,1);assert.equal(calls.filter(isStatus).length,2);
+ assert.ok(calls.every(c=>!c.args.includes('auth')&&!c.file.includes('anthropic')));
+ assert.deepEqual(calls.at(-1)?.args,['--experimental-strip-types','scripts/start-real.ts','--enable-inference','--openai-only']);
+});

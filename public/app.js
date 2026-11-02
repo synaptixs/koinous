@@ -55,7 +55,9 @@ function selection() {
 function refresh() {
   const chosen = selection();
   const invalidModel = Object.values(chosen.models).some(value => value.length > 128 || (value && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value)));
-  const error = !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two providers.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const selected=rows.filter(row=>row.toggle.checked);
+  const duplicateModel=selected.some(row=>selected.some(other=>other!==row&&other.provider===row.provider&&(!(row.model.value.trim()||row.defaultModel)||!(other.model.value.trim()||other.defaultModel)||(row.model.value.trim()||row.defaultModel)===(other.model.value.trim()||other.defaultModel))));
+  const error = !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
   $('run').disabled = busy || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
@@ -154,7 +156,7 @@ const configurationReady = fetch('/api/health').then(async response => {
   const health = await response.json();
   inferenceEnabled = health.mode === 'mock' || health.inferenceEnabled === true;
   $('providers').textContent = health.mode === 'mock' ? 'Mock mode · no model calls' : 'Subscription login · no API-key fallback';
-  for (const provider of health.availableProviders) {
+  for (const provider of health.availableParticipants || health.availableProviders) {
     const card = document.createElement('div'); card.className = 'choice';
     const label = document.createElement('label');
     const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = health.agents.includes(provider.id); toggle.id = 'provider-' + provider.id;
@@ -163,7 +165,7 @@ const configurationReady = fetch('/api/health').then(async response => {
     const model = document.createElement('input'); model.type = 'text'; model.id = modelLabel.htmlFor; model.maxLength = 128; model.placeholder = provider.defaultModel || 'SDK default'; model.autocomplete = 'off';
     const note = document.createElement('small'); note.textContent = 'Default: ' + (provider.defaultModel || 'SDK default') + (provider.id === 'grok' ? ' · Build runtime must be configured' : '');
     card.append(label, modelLabel, model, note); $('providerChoices').append(card);
-    rows.push({id: provider.id, toggle, model}); toggle.onchange = refresh; model.oninput = refresh;
+    rows.push({id: provider.id, provider: provider.provider || provider.id, defaultModel:provider.defaultModel, toggle, model}); toggle.onchange = refresh; model.oninput = refresh;
   }
   ready = true; refresh();
   if (!inferenceEnabled) $('selectionError').textContent = 'Inference is disabled. Saved discussions can still be reviewed.';
@@ -189,7 +191,7 @@ $('run').onclick = async () => {
     events.onmessage = event => {
       const x = JSON.parse(event.data);
       switch (x.type) {
-        case 'participants.configured': $('maxCalls').textContent = x.maxCalls; append('Selected providers', x.agents.map(id => id + ': ' + (x.selection?.models[id] || 'SDK default')).join('\n')); break;
+        case 'participants.configured': $('maxCalls').textContent = x.maxCalls; append('Selected participants', x.agents.map(id => id + ': ' + (x.selection?.models[id] || 'SDK default')).join('\n')); break;
         case 'runtime.preparing': $('status').textContent = 'Preparing runtime'; append('Runtime · ' + x.agent, 'Provisioning and verifying the isolated runtime before model calls'); break;
         case 'runtime.ready': append('Runtime · ' + x.agent, 'Sandbox and subscription authentication verified'); break;
         case 'runtime.cleaning': $('status').textContent = 'Cleaning up'; append('Runtime · ' + x.agent, 'Cleaning credentials and removing the disposable runtime'); break;
@@ -325,7 +327,7 @@ async function openSaved(id) {
     $('calls').textContent = s.calls; $('maxCalls').textContent = s.maxCalls ?? 'Unknown';
     $('cost').textContent = '$' + Number(s.spendKnownUSD).toFixed(4) + (s.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)');
     $('evidence').textContent = s.evidence ? s.evidence.id : 'Idea and optional context';
-    if (s.selection) append('Selected providers', s.selection.providers.map(id => id + ': ' + (s.selection.models[id] || 'SDK default')).join('\n'));
+    if (s.selection) append('Selected participants', s.selection.providers.map(id => id + ': ' + (s.selection.models[id] || 'SDK default')).join('\n'));
     for (let round=1; round<=s.maxRounds; round++) {
       append('Round ' + round, 'Saved responses');
       for (const entry of s.entries.filter(e => e.round === round)) appendResponse(entry);
