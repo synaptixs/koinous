@@ -13,7 +13,7 @@ class Element {
   append(...children:Element[]){this.children.push(...children);}
   replaceChildren(){this.children=[];this.ownText='';}
 }
-async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string) {
+async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={}) {
   const elements=Object.fromEntries(['researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
@@ -23,7 +23,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
     constructor(_url:string){streams.push(this);}close(){this.closed=true;}
   }
   const fetch=async(url:string,options?:{body?:string})=>{
-    if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}]})};
+    if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}],...healthOverride})};
     if(url.startsWith('/api/sessions?')&&!options){historyRequests.push(url);if(historyFetch)return historyFetch(url);return {ok:true,json:async()=>({sessions:saved?[{id:saved.id,prompt:saved.prompt,status:saved.status,createdAt:'2026-11-01'}]:[],total:saved?1:0,discoveredTotal:saved?1:0,unavailable:0,truncated:false,scanTruncated:false,page:1,pageSize:50,totalPages:1,q:'',hasPrevious:false,hasNext:false})};}
     if(url==='/api/sessions/saved-id'&&!options)return {ok:true,json:async()=>saved};
     requests.push({url,...JSON.parse(options?.body||'{}')});
@@ -261,4 +261,17 @@ test('recommendation sections retain dissent and unsupported checks in labeled d
  assert.match(detail[1].children[0].textContent,/1 unsupported/);assert.match(detail[1].textContent,/No evidence/);
  const before=root.textContent;event();assert.equal(root.textContent,before,'rerender replaces rather than duplicates');
  assert.ok(!all.some(e=>e.tagName==='a'||e.tagName==='script'));
+});
+
+
+test('OpenAI-only UI requires two distinct models, posts both slots and reopens both originals',async()=>{
+ const health={agents:['codex','codex-2'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:''}],availableParticipants:[{id:'codex',provider:'codex',label:'OpenAI · Participant 1',defaultModel:''},{id:'codex-2',provider:'codex',label:'OpenAI · Participant 2',defaultModel:''}]};
+ const {elements,rows,requests}=await setup(false,false,undefined,false,undefined,undefined,health);
+ assert.equal(rows.length,2);assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/different model IDs/);
+ rows[0].model.value='model-a';rows[1].model.value='model-a';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);
+ rows[1].model.value='model-b';rows[1].model.oninput!();assert.equal(elements.run.disabled,false);assert.equal(elements.plannedCalls.textContent,6);
+ await elements.run.onclick!();assert.deepEqual(requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}});
+ const saved={id:'saved-id',prompt:'Saved two-model idea',maxRounds:3,status:'completed',readOnly:true,calls:6,maxCalls:6,spendKnownUSD:0,spendIncomplete:true,selection:requests[0].selection,entries:[1,2,3].flatMap(round=>['codex','codex-2'].map(agent=>({round,agent,text:agent+' original '+round}))),outcome:null};
+ const reopened=await setup(false,false,saved,true,undefined,undefined,health);reopened.elements.savedSessions.value='saved-id';await reopened.elements.openSaved.onclick!();
+ assert.equal(reopened.requests.length,0);assert.equal(reopened.rows[1].model.value,'model-b');assert.match(reopened.elements.feed.textContent,/codex-2 original 3/);assert.equal(reopened.elements.run.disabled,true);
 });

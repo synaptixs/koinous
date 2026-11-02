@@ -1,5 +1,38 @@
 # Koinous team demo
 
+## OpenAI-only corporate demo
+
+If your team uses only corporate ChatGPT/Codex access, run:
+
+```sh
+npm run demo:live -- --openai-only
+```
+
+This installs pinned dependencies and reuses your local ChatGPT login or opens
+Codex's browser login flow when needed. Sign in with your approved corporate
+account. It checks only Codex; Claude and Grok are disabled, with no API-key
+fallback. An existing login is reused, so confirm it is the intended corporate
+account before starting. Koinous does not select an enterprise workspace for you.
+
+In the UI, enter **two different model IDs** available through that account,
+one for each OpenAI participant. Keep three rounds for six responses: initial
+analysis, peer review, and revised recommendations. Each participant has a separate
+conversation, peer identity, selected model and accounting. Both use the same
+local subscription login. Start discussion sends prompts; setup sends none.
+Stop with Ctrl+C when finished.
+
+Your organization must allow Codex and both requested models. Login status is
+not an entitlement or quota check. No model list is invented or automatically
+probed, and a rejected model stops the discussion without fallback or retries.
+Different requested IDs can be aliases; Koinous cannot prove distinct underlying
+models when the provider does not report their resolved identities. Two models
+from one provider are not independent evidence of correctness. Subscription USD
+costs remain unknown when the SDK supplies no cost.
+
+This path is verified offline and in the mock UI. Corporate authentication and
+live two-OpenAI-model inference have not been tested. The earlier live acceptance
+covers Codex plus Claude, not this new combination.
+
 ## One-command live demo
 
 Install Node.js 22.16 or newer with npm, extract the bundle, then run in its folder:

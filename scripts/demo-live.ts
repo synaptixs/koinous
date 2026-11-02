@@ -30,8 +30,9 @@ export function runDemoCommand(command:DemoCommand,signal:AbortSignal):Promise<A
 }
 export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:AbortSignal;log?:(s:string)=>void;npmPath?:string;nodeVersion?:string}={}){
  const log=options.log??console.log,run=options.run??runDemoCommand,signal=options.signal??new AbortController().signal;
- if(args.length===1&&args[0]==='--help'){log('npm run demo:live — installs pinned dependencies, opens missing subscription login flows, then starts the live UI. No model calls until Start discussion. Ctrl+C stops. Requires Node 22.16+ and internet.');return;}
- if(args.length)throw Error('Use npm run demo:live with no arguments, or -- --help.');
+ if(args.length===1&&args[0]==='--help'){log('npm run demo:live — installs pinned dependencies, opens missing subscription login flows, then starts the live UI. No model calls until Start discussion. Ctrl+C stops. Use -- --openai-only for two OpenAI models with one corporate ChatGPT/Codex login (no Claude login). Requires Node 22.16+ and internet.');return;}
+ const openaiOnly=args.length===1&&args[0]==='--openai-only';
+ if(args.length&&!openaiOnly)throw Error('Use npm run demo:live, -- --openai-only, or -- --help.');
  const [major,minor]=(options.nodeVersion??process.versions.node).split('.').map(Number);
  if(!Number.isInteger(major)||major<22||(major===22&&minor<16))throw Error('Install Node.js 22.16 or newer (with npm), then retry.');
  const npmPath=options.npmPath??process.env.npm_execpath;
@@ -39,7 +40,7 @@ export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:Ab
  const step=async(command:DemoCommand)=>{signal.throwIfAborted();const result=await run(command,signal);signal.throwIfAborted();return result;};
  log('Installing pinned dependencies with npm ci. Existing node_modules will be replaced. Grok off; inference disabled during setup.');
  if((await step({file:process.execPath,args:[npmPath,'ci','--include=dev','--include=optional'],capture:false,timeoutMs:600000})).code!==0)throw Error('Dependency installation failed. Check internet/registry access, then rerun npm run demo:live.');
- for(const provider of ['codex','claude'] as LoginProvider[]){
+ for(const provider of (openaiOnly?['codex']:['codex','claude']) as LoginProvider[]){
   const auth=(action:'login'|'status')=>step({...authCommand(provider,action),capture:action==='status',timeoutMs:action==='status'?15000:300000});
   if(!subscriptionReady(provider,await auth('status'))){
    log(`Sign in to your own ${provider==='codex'?'ChatGPT':'Claude'} subscription in the provider login flow. No API-key fallback.`);
@@ -48,8 +49,8 @@ export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:Ab
   }
   log(`${provider}: subscription login confirmed.`);
  }
- log('Starting Codex/Claude live demo. Open the URL printed below; Start discussion uses your subscription quota. Ctrl+C stops the server.');
- const result=await step({file:process.execPath,args:['--experimental-strip-types','scripts/start-real.ts','--enable-inference'],capture:false,timeoutMs:0});
+ log('Starting '+(openaiOnly?'OpenAI-only':'Codex/Claude')+' live demo. Open the URL printed below; Start discussion uses your subscription quota. Ctrl+C stops the server.');
+ const result=await step({file:process.execPath,args:['--experimental-strip-types','scripts/start-real.ts','--enable-inference',...(openaiOnly?['--openai-only']:[])],capture:false,timeoutMs:0});
  if(result.code!==0)throw Error('Live demo server exited unsuccessfully. Check the message above; no automatic restart.');
 }
 if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url){

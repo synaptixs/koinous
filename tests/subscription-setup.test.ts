@@ -36,3 +36,13 @@ test('real startup requires explicit opt-in and both subscription checks; Grok a
  assert.equal(app.mode,'real');assert.equal(process.env.KOINOUS_PROVIDERS,'codex,claude');assert.equal(process.env.KOINOUS_DISABLED_PROVIDERS,'grok');assert.equal(process.env.GROK_BUILD_ENABLE_INFERENCE,'0');assert.equal(process.env.KOINOUS_ENABLE_INFERENCE,'1');
  assert.equal(app.engine.sessions.size,0);await app.shutdown();
 });
+
+test('OpenAI-only startup requires Codex subscription, never checks Claude and fails closed on API login',async t=>{
+ const before={...process.env};t.after(()=>{for(const k of Object.keys(process.env))if(!(k in before))delete process.env[k];Object.assign(process.env,before);});
+ const args=['--enable-inference','--openai-only'];const calls:string[]=[];
+ await assert.rejects(preparePersonalDiscussion(args,async()=>ok('Logged in using an API key')),/Codex subscription/);
+ assert.equal(process.env.KOINOUS_ENABLE_INFERENCE,'0');
+ const app=await preparePersonalDiscussion(args,async(p,a)=>{calls.push(p+':'+a);return ok('Logged in using ChatGPT');});
+ assert.deepEqual(calls,['codex:status']);assert.equal(process.env.KOINOUS_DISABLED_PROVIDERS,'claude,grok');assert.equal(process.env.KOINOUS_PROVIDERS,'codex');assert.equal(app.engine.sessions.size,0);
+ await app.shutdown();process.env.KOINOUS_ENABLE_INFERENCE='0';
+});

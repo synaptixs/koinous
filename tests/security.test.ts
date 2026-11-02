@@ -1,3 +1,4 @@
+import type {ParticipantId} from '../src/participants.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
@@ -9,12 +10,12 @@ import type {IncomingMessage,ServerResponse} from 'node:http';
 import {createProtectedApplication} from '../src/secure-server.ts';
 import {digest,principals,containsSensitive,guardedAdapter,SecurityAudit} from '../src/security.ts';
 import {ProviderFailure} from '../src/provider-runtime.ts';
-import type {AgentId,Adapter} from '../src/core.ts';
+import type {Adapter} from '../src/core.ts';
 const secret='sk-'+ 'a'.repeat(30);
 function fixture(t:test.TestContext,mode:'mock'|'real'='mock',adapterRun?:Adapter['run']){
  const root=mkdtempSync(join(tmpdir(),'koinous-secure-'));
  const a=randomBytes(32).toString('base64url'),b=randomBytes(32).toString('base64url');let calls=0;
- const config={root,port:3031,mode,principals:[{subject:'alice',tenant:'alpha',tokenSha256:digest(a)},{subject:'bob',tenant:'beta',tokenSha256:digest(b)}],adapterFactory:(_mode:string,ids:readonly AgentId[]=[])=>ids.map(id=>({id,async run(prompt:string,round:1|2|3,signal:AbortSignal){calls++;return adapterRun?adapterRun(prompt,round,signal):{text:'Synthetic answer',usage:{inputTokens:2,outputTokens:3,usd:null}};}}))};
+ const config={root,port:3031,mode,principals:[{subject:'alice',tenant:'alpha',tokenSha256:digest(a)},{subject:'bob',tenant:'beta',tokenSha256:digest(b)}],adapterFactory:(_mode:string,ids:readonly ParticipantId[]=[])=>ids.map(id=>({id,async run(prompt:string,round:1|2|3,signal:AbortSignal){calls++;return adapterRun?adapterRun(prompt,round,signal):{text:'Synthetic answer',usage:{inputTokens:2,outputTokens:3,usd:null}};}}))};
  let app=createProtectedApplication(config);t.after(async()=>{await app.shutdown();rmSync(root,{recursive:true,force:true});});
  async function request(path:string,method='GET',body?:unknown,token:string|undefined=a,headers:Record<string,string>={}){
   const req=Object.assign(Readable.from(body===undefined?[]:[JSON.stringify(body)]),{url:path,method,headers:{host:'127.0.0.1:3031',...(token?{authorization:'Bearer '+token}:{}),...headers}});

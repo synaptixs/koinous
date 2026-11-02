@@ -1,3 +1,5 @@
+import {providerFor} from './participants.ts';
+import type {ParticipantId} from './participants.ts';
 import {AGENTS} from './core.ts';
 import type {AgentId} from './core.ts';
 import {ProviderFailure} from './provider-runtime.ts';
@@ -10,7 +12,8 @@ export function validateProviders(ids: readonly string[]): AgentId[] {
 }
 
 export function configuredProviders(value = process.env.KOINOUS_PROVIDERS): AgentId[] {
-  const ids=validateProviders(value === undefined ? enabledProviders() : value.split(',').map(id => id.trim()));
+  const raw=value === undefined ? enabledProviders() : value.split(',').map(id => id.trim());
+  const ids=raw.length===1&&AGENTS.includes(raw[0] as AgentId)?raw as AgentId[]:validateProviders(raw);
   assertProvidersEnabled(ids);return ids;
 }
 
@@ -31,7 +34,7 @@ export function enabledProviders(value=process.env.KOINOUS_DISABLED_PROVIDERS): 
   if(new Set(disabled).size!==disabled.length||disabled.some(id=>!AGENTS.includes(id as AgentId)))throw new ProviderFailure('configuration','Invalid KOINOUS_DISABLED_PROVIDERS');
   return AGENTS.filter(id=>!disabled.includes(id));
 }
-export function assertProvidersEnabled(ids:readonly AgentId[]):void {
+export function assertProvidersEnabled(ids:readonly ParticipantId[]):void {
   const enabled=enabledProviders();
-  if(ids.some(id=>!enabled.includes(id)))throw new ProviderFailure('configuration','Selected provider is disabled by server configuration');
+  if(ids.some(id=>!enabled.includes(providerFor(id))))throw new ProviderFailure('configuration','Selected provider is disabled by server configuration');
 }

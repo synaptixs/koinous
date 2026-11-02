@@ -6,13 +6,13 @@ import {join} from 'node:path';
 import {Readable} from 'node:stream';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {createApplication} from '../src/server.ts';
-import type {AgentId} from '../src/core.ts';
+import type {ParticipantId} from '../src/participants.ts';
 process.env.EVIDENCE_FILE=new URL('../examples/demo-evidence.json',import.meta.url).pathname;
 delete process.env.MCP_SERVER_URL;
 function setup(t:test.TestContext,real=false) {
  const outputDir=mkdtempSync(join(tmpdir(),'koinous-api-'));t.after(()=>rmSync(outputDir,{recursive:true,force:true}));
- const invocations:Array<{id:AgentId;model:string|undefined;prompt:string;round:number}>=[];
- const app=createApplication({mode:real?'real':'mock',outputDir,defaults:{providers:['codex','claude'],models:{codex:'default-codex',claude:'',grok:'grok-4.7'}},...(real?{}:{adapterFactory:(_mode:string,ids:readonly AgentId[]=[],models:Partial<Record<AgentId,string>>={})=>ids.map(id=>({id,async run(prompt:string,round:1|2|3){invocations.push({id,model:models[id],prompt,round});await Promise.resolve();return {text:`${id} ${models[id]} round ${round}`,requestedModel:models[id]||undefined,usage:{usd:id==='codex'?null:0.01}};}}))})});
+ const invocations:Array<{id:ParticipantId;model:string|undefined;prompt:string;round:number}>=[];
+ const app=createApplication({mode:real?'real':'mock',outputDir,defaults:{providers:['codex','claude'],models:{codex:'default-codex',claude:'',grok:'grok-4.7'}},...(real?{}:{adapterFactory:(_mode:string,ids:readonly ParticipantId[]=[],models:Partial<Record<ParticipantId,string>>={})=>ids.map(id=>({id,async run(prompt:string,round:1|2|3){invocations.push({id,model:models[id],prompt,round});await Promise.resolve();return {text:`${id} ${models[id]} round ${round}`,requestedModel:models[id]||undefined,usage:{usd:id==='codex'?null:0.01}};}}))})});
  async function request(path:string,method='GET',body?:unknown,origin?:string) {
   const req=Object.assign(Readable.from(body===undefined?[]:[JSON.stringify(body)]),{url:path,method,headers:origin?{origin}:{}});
   let status=0,text='';let headers:Record<string,string>={};
@@ -64,7 +64,7 @@ test('application shutdown cancels active work and waits for disposal before res
  const outputDir=mkdtempSync(join(tmpdir(),'koinous-shutdown-'));t.after(()=>rmSync(outputDir,{recursive:true,force:true}));
  let prepared!:()=>void;const started=new Promise<void>(r=>{prepared=r;});let release!:()=>void;let cleaning!:()=>void;
  const cleanupStarted=new Promise<void>(r=>{cleaning=r;});const cleanupGate=new Promise<void>(r=>{release=r;});
- const app=createApplication({mode:'mock',outputDir,adapterFactory:()=>['codex','claude'].map(id=>({id:id as AgentId,
+ const app=createApplication({mode:'mock',outputDir,adapterFactory:()=>['codex','claude'].map(id=>({id:id as ParticipantId,
   async prepare(signal:AbortSignal){prepared();await new Promise<void>((_resolve,reject)=>{signal.addEventListener('abort',()=>reject(Error('cancelled')),{once:true});});},
   async run(){throw Error('must never call');},async dispose(){cleaning();await cleanupGate;}
  }))});
@@ -158,4 +158,18 @@ test('disabling Grok preserves reopening an existing saved Grok discussion',asyn
  const {SavedSessions}=await import('../src/saved-sessions.ts');
  const saved=new SavedSessions(outputDir).load(created.id);
  assert.ok(saved);assert.deepEqual(saved.selection?.providers,['codex','grok']);assert.equal(saved.entries.length,2);
+});
+
+test('API accepts two OpenAI model slots and applies provider disabling to aliases before dispatch',async t=>{
+ const old=process.env.KOINOUS_DISABLED_PROVIDERS;process.env.KOINOUS_DISABLED_PROVIDERS='grok';t.after(()=>{if(old===undefined)delete process.env.KOINOUS_DISABLED_PROVIDERS;else process.env.KOINOUS_DISABLED_PROVIDERS=old;});
+ const {request,finished,invocations,app}=setup(t);
+ const health=(await request('/api/health')).json();assert.deepEqual(health.availableParticipants.map((p:{id:string})=>p.id),['codex','claude','codex-2','claude-2']);
+ const selection={providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}};
+ for(const models of [{},{codex:'same','codex-2':'same'}])assert.equal((await request('/api/sessions','POST',{prompt:'Synthetic',selection:{providers:selection.providers,models}})).status,400);
+ assert.equal(app.engine.sessions.size,0);
+ const created=await request('/api/sessions','POST',{prompt:'Synthetic',selection});assert.equal(created.status,201);
+ const s=await finished(created.json().id);assert.equal(s.calls,6);assert.deepEqual(s.participants,selection.providers);assert.equal(invocations.filter(i=>i.id==='codex-2'&&i.model==='model-b').length,3);
+ process.env.KOINOUS_DISABLED_PROVIDERS='claude,grok';
+ const onlyOpenAI=(await request('/api/health')).json();assert.deepEqual(onlyOpenAI.availableProviders.map((p:{id:string})=>p.id),['codex']);assert.deepEqual(onlyOpenAI.availableParticipants.map((p:{id:string})=>p.id),['codex','codex-2']);
+ const rejected=await request('/api/sessions','POST',{prompt:'Synthetic',selection:{providers:['codex','claude-2'],models:{}}});assert.equal(rejected.status,400);assert.match(rejected.text,/disabled/);
 });
