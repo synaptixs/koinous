@@ -94,6 +94,33 @@ function validationNotice(validation) {
 }
 // Presentation only: render declared fields without assessing agreement or factual support.
 // The server's outcome and coverage remain authoritative; the exact response stays available.
+function comparisonShape(value) {
+  return value&&typeof value==='object'&&!Array.isArray(value)
+    &&Object.keys(value).length===3
+    &&(value.alternative===null||(typeof value.alternative==='string'&&value.alternative.trim()))
+    &&typeof value.tradeoff==='string'&&value.tradeoff.trim()
+    &&typeof value.switchCondition==='string'&&value.switchCondition.trim();
+}
+function comparisonView(position) {
+  const block=viewNode('section',undefined,'response-section');
+  block.append(viewNode('h4','Decision comparison'));
+  const c=position.comparison;
+  if(c===undefined)block.append(viewNode('p','Not recorded.'));
+  else if(!comparisonShape(c))block.append(viewNode('p','Comparison unavailable; inspect the original response.'));
+  else for(const [label,value] of [['Alternative',c.alternative??'No feasible alternative declared.'],['Tradeoff / feasibility',c.tradeoff],['Switch condition',c.switchCondition]]){
+    block.append(viewNode('h4',label),viewNode('p',value));
+  }
+  return block;
+}
+function peerChangeView(position) {
+  const block=viewNode('section',undefined,'response-section');
+  block.append(viewNode('h4','Declared response to peer review'));
+  if(position.revisions===undefined)block.append(viewNode('p','Not recorded.'));
+  else if(!position.revisions.length)block.append(viewNode('p','No peer responses declared.'));
+  else for(const r of position.revisions)block.append(viewNode('p',r.peer+' — '+r.decision+': '+r.reason));
+  block.append(viewNode('p','Participant declarations only; changes and benefits are not independently verified.'));
+  return block;
+}
 function appendResponse(entry) {
   const title='Round '+entry.round+' · '+entry.agent;
   const original=typeof entry.text==='string'?entry.text:'';
@@ -113,6 +140,7 @@ function appendResponse(entry) {
   const usable=data&&typeof data==='object'&&!Array.isArray(data)&&(review
     ? responses(data.reviews)&&text(data.revisedView)&&strings(data.openQuestions)
     : text(data.direction)&&text(data.recommendation)&&text(data.rationale)&&strings(data.risks)&&strings(data.disagreements)&&strings(data.nextSteps)
+      &&(data.comparison===undefined||comparisonShape(data.comparison))
       &&(data.revisions===undefined||responses(data.revisions))
       &&(data.claims===undefined||Array.isArray(data.claims)&&data.claims.every(c=>c&&text(c.id)&&text(c.kind)&&text(c.text)&&strings(c.evidenceIds)&&(c.snapshotId===null||text(c.snapshotId)))));
   if(!usable){fallback();return;}
@@ -127,7 +155,7 @@ function appendResponse(entry) {
     body.append(block);
   };
   section(review?'Revised view':'Recommendation',review?data.revisedView:data.recommendation);
-  if(!review){section('Declared direction',data.direction);section('Why this approach',data.rationale);}
+  if(!review){body.append(comparisonView(data));section('Declared direction',data.direction);section('Why this approach',data.rationale);}
   const peers=node('section',undefined,'response-section');peers.append(node('h4',review?'Peer assessments':'Responses to peer critiques'));
   const declared=review?data.reviews:data.revisions;
   if(!declared?.length)peers.append(node('p',declared?'No peer responses declared.':'Revision responses were not recorded.','response-empty'));
@@ -246,7 +274,8 @@ function showOutcome(o) {
   root.append(viewNode('p',o.caveat,'assessment-caveat'));
   root.append(viewSection('Next actions',viewList(o.nextSteps,true)));
   const reasons=viewNode('div',undefined,'summary-grid');
-  for(const p of o.positions){const card=viewSection(p.agent+' · Why this approach',readableText(p.position.rationale));
+  for(const p of o.positions){const card=viewSection(p.agent+' · Decision brief',readableText(p.position.recommendation||'Proposal not recorded.'));
+    card.append(comparisonView(p.position),viewNode('h4','Why this approach'),readableText(p.position.rationale),peerChangeView(p.position));
     card.append(viewNode('h4','Risks and tradeoffs'),p.position.risks.length?viewList(p.position.risks):viewNode('p','No risks declared.'));reasons.append(card);}
   root.append(reasons);
   const disagreements=o.positions.flatMap(p=>(p.position.disagreements||[]).map(text=>p.agent+': '+text));

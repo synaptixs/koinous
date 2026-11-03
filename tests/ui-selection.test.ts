@@ -275,3 +275,27 @@ test('OpenAI-only UI requires two distinct models, posts both slots and reopens 
  const reopened=await setup(false,false,saved,true,undefined,undefined,health);reopened.elements.savedSessions.value='saved-id';await reopened.elements.openSaved.onclick!();
  assert.equal(reopened.requests.length,0);assert.equal(reopened.rows[1].model.value,'model-b');assert.match(reopened.elements.feed.textContent,/codex-2 original 3/);assert.equal(reopened.elements.run.disabled,true);
 });
+
+test('decision brief presents attributed alternatives and peer responses in live and reopened views without inference',async()=>{
+ const comparison={alternative:'<img src=x onerror=alert(1)>Keep current process',tradeoff:'Less effort, less feedback.',switchCondition:'Switch after two weeks without benefit.'};
+ const position={direction:'pilot',recommendation:'Run a pilot.',rationale:'Measure demand.',risks:[],disagreements:['Timing remains unresolved.'],nextSteps:['Owner: measure after two weeks.'],comparison,revisions:[{peer:'claude',decision:'rejected',reason:'Unchanged: no material new evidence.'}],claims:[]};
+ const outcome={recommendation:position.recommendation,status:'direction-alignment',coverage:{valid:2,expected:2},proposalBy:'codex',supporters:['codex','claude'],positions:[{agent:'codex',position},{agent:'claude',position:{...position,comparison:{...comparison,alternative:null},revisions:[]}}],nextSteps:position.nextSteps,unresolved:[],caveat:'Not verified consensus'};
+ const live=await setup();await live.elements.run.onclick!();
+ live.streams[0].onmessage!({data:JSON.stringify({type:'discussion.assessed',outcome})});
+ const text=live.elements.outcome.textContent;
+ for(const expected of ['codex · Decision brief','claude · Decision brief',comparison.alternative,comparison.switchCondition,'No feasible alternative declared.','Unchanged: no material new evidence.','not independently verified','Timing remains unresolved.'])assert.ok(text.includes(expected),expected);
+ const tags=(e:Element):string[]=>[e.tagName,...e.children.flatMap(tags)];assert.ok(!tags(live.elements.outcome).includes('img'));
+ const raw=JSON.stringify(position);
+ const saved={id:'saved-id',prompt:'Saved brief',maxRounds:3,status:'completed',readOnly:true,calls:6,spendKnownUSD:0,spendIncomplete:true,entries:[{agent:'codex',round:3,text:raw}],outcome};
+ const reopened=await setup(false,false,saved);reopened.elements.savedSessions.value='saved-id';await reopened.elements.openSaved.onclick!();
+ assert.equal(reopened.elements.outcome.textContent,text);assert.ok(reopened.elements.feed.textContent.includes(raw));assert.ok(reopened.elements.feed.textContent.includes(comparison.switchCondition));assert.equal(reopened.streams.length,0);assert.equal(reopened.requests.length,0);
+});
+test('decision brief legacy absence and malformed comparison stay explicit in the UI',async()=>{
+ const legacy={direction:'pilot',recommendation:'Pilot.',rationale:'Measure.',risks:[],disagreements:[],nextSteps:['Test.']};
+ const ui=await setup();await ui.elements.run.onclick!();
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'discussion.assessed',outcome:{recommendation:'Pilot.',status:'insufficient',coverage:{valid:1,expected:2},positions:[{agent:'codex',position:legacy}],nextSteps:[],unresolved:[{agent:'claude',text:'Final-round response missing.'}],caveat:'Not consensus',supporters:[]}})});
+ assert.match(ui.elements.outcome.textContent,/Decision comparisonNot recorded/);assert.match(ui.elements.outcome.textContent,/Declared response to peer reviewNot recorded/);assert.match(ui.elements.outcome.textContent,/response missing/);
+ const raw=JSON.stringify({...legacy,comparison:{alternative:'x'}});
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'agent.completed',agent:'codex',round:3,text:raw,validation:{status:'invalid',issues:[]}})});
+ assert.ok(ui.elements.feed.textContent.includes(raw));assert.doesNotMatch(ui.elements.feed.textContent,/Switch condition/);
+});

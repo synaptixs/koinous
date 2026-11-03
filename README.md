@@ -76,6 +76,30 @@ human-review gate. New prompts also reach standalone evaluation baselines throug
 `composePrompt`; future comparisons require a fresh versioned protocol and separately
 authorized matched attempt. Historical results must not be pooled with new outputs.
 
+### Decision brief
+
+Each validated participant has an attributed decision brief: chosen action, strongest
+credible alternative, decisive tradeoff, switch condition and declared response to
+peer review. The UI and Markdown report show these fields without another model call
+or inferred synthesis. Similar answers remain separately attributed; declared changes
+are not independently verified improvements. Coverage, dissent, unsupported claims
+and unchanged original responses remain available.
+
+New final positions request `comparison: {alternative, tradeoff, switchCondition}`.
+`alternative` is text, or `null` when the participant declares no feasible alternative;
+then `tradeoff` explains why and `switchCondition` states what would reopen the decision.
+The object is optional for backward compatibility: omission means **Not recorded**,
+not that no alternative exists. Each string is nonempty and targets 400 UTF-16 units;
+prose overruns warn without clipping. Unknown/missing fields, wrong types and the
+existing 12,000-unit total response cap remain blocking. Different comparisons prevent
+new assessments from claiming agreement, even when recommendation wording matches.
+
+Saved assessments retain their original comparison fields and recorded status. Older
+sessions are not reassessed or backfilled; reopening and exporting create no model
+calls and do not rewrite stored files. The original-report download remains byte-exact.
+These fields extend the final-position contract; any future evaluation requires a
+fresh versioned protocol and authorization, as described above.
+
 Downloaded Markdown reports use numbered actions, provider reasoning, disagreements,
 claim checks and readable peer-review/revision sections. Original responses remain
 verbatim in fenced blocks. Reopened sessions use their recorded assessment; older
