@@ -7,23 +7,34 @@ import {parseClaims,assessClaims,CLAIM_SCOPE} from './claims.ts';
 import type {Claim,ClaimAssessment} from './claims.ts';
 import type {Session} from './core.ts';
 export const DIRECTIONS=['proceed','revise','pilot','defer','reject'] as const;
-export type Position={revisions?:PeerResponse[];claims?:Claim[];direction:typeof DIRECTIONS[number];recommendation:string;rationale:string;risks:string[];disagreements:string[];nextSteps:string[]};
+export type DecisionComparison={alternative:string|null;tradeoff:string;switchCondition:string};
+export type Position={comparison?:DecisionComparison;revisions?:PeerResponse[];claims?:Claim[];direction:typeof DIRECTIONS[number];recommendation:string;rationale:string;risks:string[];disagreements:string[];nextSteps:string[]};
 export type Outcome={claimAssessment?:ClaimAssessment;status:'agreement'|'direction-alignment'|'majority-direction'|'split'|'insufficient';coverage:{valid:number;expected:number};positions:Array<{agent:ParticipantId;position:Position}>;missing:ParticipantId[];invalid:ParticipantId[];direction:Position['direction']|null;recommendation:string;proposalBy:ParticipantId|null;supporters:ParticipantId[];unresolved:Array<{agent:ParticipantId;text:string}>;nextSteps:string[];caveat:string};
 export const FINAL_POSITION_INSTRUCTIONS=`Return only a JSON object (no prose) with exactly these keys:
-{"revisions":[{"peer":"participant ID","decision":"adopted|rejected|unresolved","reason":"how this peer critique changed your view, or why it did not"}],"direction":"proceed|revise|pilot|defer|reject","recommendation":"one concrete recommended course of action","rationale":"why, with assumptions identified","risks":["remaining risk"],"disagreements":["specific unresolved disagreement, or empty array"],"nextSteps":["concrete next action"],"claims":[{"id":"c1","kind":"fact|assumption|proposal","text":"one material claim","evidenceIds":[],"snapshotId":null}]}.
-Include one revisions entry for each peer whose critique you received, never yourself; at most two entries, each reason at most 400 characters. Explain concrete changes or why you retain your position. Next steps should include an owner or role, an observable success criterion and a stop/revisit condition. Include all material factual premises as claims; do not hide them in rationale. Use kind fact for factual assertions, assumption for unverified premises, proposal for suggested actions. Cite only supplied evidence IDs and their exact snapshotId; otherwise use [] and null. Up to eight claims, each text at most 600 characters, ID 1–40 letters/digits/underscore/hyphen, up to five evidence IDs of 200 characters, snapshotId at most 200 characters. Use claims: [] only when there are no material claims. Choose one direction value. Limit the complete response to 12000 characters. Limit recommendation and rationale to 1200 characters each; risks, disagreements and nextSteps to five strings of 400 characters each. Do not claim other providers endorse your wording. Preserve uncertainty and disagreement; agreement is not a correctness guarantee.`;
+{"comparison":{"alternative":"strongest credible alternative, or null if none is feasible","tradeoff":"decisive tradeoff, or why no alternative is feasible","switchCondition":"observable evidence or condition that would change the decision"},"revisions":[{"peer":"participant ID","decision":"adopted|rejected|unresolved","reason":"how this peer critique changed your view, or why it did not"}],"direction":"proceed|revise|pilot|defer|reject","recommendation":"one concrete recommended course of action","rationale":"why, with assumptions identified","risks":["remaining risk"],"disagreements":["specific unresolved disagreement, or empty array"],"nextSteps":["concrete next action"],"claims":[{"id":"c1","kind":"fact|assumption|proposal","text":"one material claim","evidenceIds":[],"snapshotId":null}]}.
+Include comparison in new responses. Each comparison string targets at most 400 characters. Use alternative: null only when no feasible alternative exists; explain why in tradeoff and what would reopen the decision in switchCondition. These are your declarations, not independently verified facts; include material factual premises in claims. Do not repeat the full comparison in rationale. Include one revisions entry for each peer whose critique you received, never yourself; at most two entries, each reason at most 400 characters. Explain concrete changes or why you retain your position. Next steps should include an owner or role, an observable success criterion and a stop/revisit condition. Include all material factual premises as claims; do not hide them in rationale. Use kind fact for factual assertions, assumption for unverified premises, proposal for suggested actions. Cite only supplied evidence IDs and their exact snapshotId; otherwise use [] and null. Up to eight claims, each text at most 600 characters, ID 1–40 letters/digits/underscore/hyphen, up to five evidence IDs of 200 characters, snapshotId at most 200 characters. Use claims: [] only when there are no material claims. Choose one direction value. Limit the complete response to 12000 characters. Limit recommendation and rationale to 1200 characters each; risks, disagreements and nextSteps to five strings of 400 characters each. Do not claim other providers endorse your wording. Preserve uncertainty and disagreement; agreement is not a correctness guarantee.`;
 export function parsePosition(text:string,issues:ValidationIssue[]=[]):Position|null {
  const v=new ResponseValidator(issues),p=v.json(text,12000);
  const required=['direction','recommendation','rationale','risks','disagreements','nextSteps'];
- if(!v.valid||!v.record(p,'response',required,['claims','revisions']))return null;
+ if(!v.valid||!v.record(p,'response',required,['claims','revisions','comparison']))return null;
  v.choice(p.direction,'direction',DIRECTIONS);
  for(const key of ['recommendation','rationale'])v.text(p[key],key,1200);
  for(const key of ['risks','disagreements','nextSteps'])v.strings(p[key],key,5,400);
  if(Array.isArray(p.nextSteps)&&!p.nextSteps.length)v.issue('nextSteps','invalid_value','nextSteps: at least one next action is required.');
+ const comparison=Object.hasOwn(p,'comparison')?parseComparison(p.comparison,issues):undefined;
  const claims=Object.hasOwn(p,'claims')?parseClaims(p.claims,issues):undefined;
  const revisions=Object.hasOwn(p,'revisions')?parsePeerResponses(p.revisions,issues,'revisions'):undefined;
- if(!v.valid||claims===null||revisions===null)return null;
- return {...(revisions!==undefined?{revisions}:{}),...(claims!==undefined?{claims}:{}),direction:p.direction,recommendation:p.recommendation.trim(),rationale:p.rationale.trim(),risks:p.risks.map((x:string)=>x.trim()),disagreements:p.disagreements.map((x:string)=>x.trim()),nextSteps:p.nextSteps.map((x:string)=>x.trim())};
+ if(!v.valid||comparison===null||claims===null||revisions===null)return null;
+ return {...(comparison!==undefined?{comparison}:{}),...(revisions!==undefined?{revisions}:{}),...(claims!==undefined?{claims}:{}),direction:p.direction,recommendation:p.recommendation.trim(),rationale:p.rationale.trim(),risks:p.risks.map((x:string)=>x.trim()),disagreements:p.disagreements.map((x:string)=>x.trim()),nextSteps:p.nextSteps.map((x:string)=>x.trim())};
+}
+export function parseComparison(value:unknown,issues:ValidationIssue[]=[]):DecisionComparison|null {
+ const v=new ResponseValidator(issues);
+ if(!v.record(value,'comparison',['alternative','tradeoff','switchCondition']))return null;
+ if(value.alternative!==null)v.text(value.alternative,'comparison.alternative',400);
+ v.text(value.tradeoff,'comparison.tradeoff',400);
+ v.text(value.switchCondition,'comparison.switchCondition',400);
+ if(!v.valid)return null;
+ return {alternative:value.alternative===null?null:(value.alternative as string).trim(),tradeoff:(value.tradeoff as string).trim(),switchCondition:(value.switchCondition as string).trim()};
 }
 const normalized=(s:string)=>s.trim().replace(/\s+/g,' ').toLowerCase();
 export function assessDiscussion(s:Session):Outcome{
@@ -44,8 +55,8 @@ export function assessDiscussion(s:Session):Outcome{
  for(const c of claimAssessment.checks)if(c.status!=='proposal')unresolved.push({agent:c.agent,text:`Claim ${c.claim.id} (${c.status}): ${c.claim.text} ${c.issues.join(' ')}`});
  // Matching a recommendation does not settle different rationale, risks or next steps.
  if(positions.length>1){
-  const signature=(p:Position)=>JSON.stringify([normalized(p.rationale),p.risks.map(normalized).sort(),p.nextSteps.map(normalized).sort(),(p.claims??[]).filter(c=>c.kind==='proposal').map(c=>normalized(c.text)).sort()]);
-  if(new Set(positions.map(p=>signature(p.position))).size>1)for(const {agent,position} of positions)unresolved.push({agent,text:`Rationale, risk, next-step or proposal differences remain unreviewed. Rationale: ${position.rationale} Risks: ${position.risks.join('; ')} Next steps: ${position.nextSteps.join('; ')}`});
+  const signature=(p:Position)=>JSON.stringify([p.comparison?[p.comparison.alternative===null?null:normalized(p.comparison.alternative),normalized(p.comparison.tradeoff),normalized(p.comparison.switchCondition)]:null,normalized(p.rationale),p.risks.map(normalized).sort(),p.nextSteps.map(normalized).sort(),(p.claims??[]).filter(c=>c.kind==='proposal').map(c=>normalized(c.text)).sort()]);
+  if(new Set(positions.map(p=>signature(p.position))).size>1)for(const {agent,position} of positions)unresolved.push({agent,text:`Comparison, rationale, risk, next-step or proposal differences remain unreviewed. Rationale: ${position.rationale} Risks: ${position.risks.join('; ')} Next steps: ${position.nextSteps.join('; ')}`});
  }
  const counts=DIRECTIONS.map(direction=>({direction,count:positions.filter(p=>p.position.direction===direction).length})).sort((a,b)=>b.count-a.count);
  const leader=counts[0];const majority=leader.count>roster.length/2&&positions.length>=2;
@@ -71,6 +82,7 @@ export function outcomeMarkdown(o:Outcome):string[]{
  const lines=['## Final recommendation','',safe(o.recommendation),'',`**Assessment:** ${o.status}. **Validated final positions:** ${o.coverage.valid}/${o.coverage.expected}.`,
  o.proposalBy?`Proposal by ${o.proposalBy}; direction ${o.direction} supported by ${o.supporters.join(', ')}. Wording is jointly matched only when assessment is agreement.`:'No majority recommendation established; the recommendation above is a procedural fallback.', '',safe(o.caveat),'','### Next actions','',...o.nextSteps.map((x,i)=>`${i+1}. ${safe(x)}`),'','### Provider reasoning',''];
  for(const {agent,position} of o.positions){
+  lines.push(`#### ${agent} — Decision brief`,'',...decisionBriefMarkdown(position));
   lines.push(`#### ${agent} — Why this approach`,'',safe(position.rationale),'','**Provider proposal:** '+safe(position.recommendation),'',`**Declared direction:** ${position.direction}`,'','**Risks and tradeoffs**','',...(position.risks.length?position.risks.map(r=>`- ${safe(r)}`):['No risks declared.']),'','**Provider next actions**','',...position.nextSteps.map((x,i)=>`${i+1}. ${safe(x)}`),'');
  }
  lines.push('### Unresolved disagreements','');
@@ -87,4 +99,20 @@ export function outcomeMarkdown(o:Outcome):string[]{
   if(!o.claimAssessment.checks.length)lines.push('No structured claims declared; this is not proof that the response contains no factual assertions.');
  }else lines.push('Claim assessment was not recorded for this saved discussion; support is unassessed.');
  lines.push('');return lines;
+}
+
+export function decisionBriefMarkdown(p:Position,includePeers=true):string[]{
+ const c=p.comparison;
+ const lines=['**Decision comparison**','',...(c?[
+  '**Alternative:** '+safe(c.alternative??'No feasible alternative declared.'),
+  '**Tradeoff / feasibility:** '+safe(c.tradeoff),
+  '**Switch condition:** '+safe(c.switchCondition)
+ ]:['Not recorded.']),''];
+ if(!includePeers)return lines;
+ lines.push('**Declared response to peer review**','');
+ if(p.revisions===undefined)lines.push('Not recorded.');
+ else if(!p.revisions.length)lines.push('No peer responses declared.');
+ else for(const r of p.revisions)lines.push(`- ${r.peer} — ${r.decision}: ${safe(r.reason)}`);
+ lines.push('','Participant declarations only; changes and benefits are not independently verified.','');
+ return lines;
 }

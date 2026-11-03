@@ -17,7 +17,7 @@ export class ResponseValidator {
   if(!value.trim()){this.issue(path,'invalid_value',`${path}: text must not be empty.`);valid=false;}
   if(value.length>max){
    // Only prose fields are advisory. IDs, references and the total-response cap remain strict.
-   const warning=/^(revisedView|recommendation|rationale|(reviews|revisions)\[\d+\]\.reason|(risks|disagreements|nextSteps|openQuestions)\[\d+\]|claims\[\d+\]\.text)$/.test(path);
+   const warning=/^(revisedView|recommendation|rationale|comparison\.(alternative|tradeoff|switchCondition)|(reviews|revisions)\[\d+\]\.reason|(risks|disagreements|nextSteps|openQuestions)\[\d+\]|claims\[\d+\]\.text)$/.test(path);
    this.issue(path,'too_long',`${path}: ${value.length} characters; limit ${max}; ${value.length-max} over.`,{actual:value.length,limit:max},warning?'warning':'error');if(!warning)valid=false;}
   return valid;
  }
