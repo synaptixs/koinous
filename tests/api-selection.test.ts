@@ -44,6 +44,15 @@ test('UI serves current synqo branding and prevents stale HTML and script cachin
  const script=await request('/app.js');assert.equal(script.status,200);assert.equal(script.headers['Cache-Control'],'no-store');
  assert.equal(app.engine.sessions.size,0);assert.equal(invocations.length,0);
 });
+test('health offers bounded cloud setup guidance for the configured daemon without starting models',async t=>{
+ const before=process.env.KOINOUS_OLLAMA_URL;process.env.KOINOUS_OLLAMA_URL='http://localhost:12444';t.after(()=>{if(before===undefined)delete process.env.KOINOUS_OLLAMA_URL;else process.env.KOINOUS_OLLAMA_URL=before;});
+ const {request,app,invocations}=setup(t);const response=await request('/api/health'),guidance=response.json().ollamaCloudSetup;
+ assert.equal(response.status,200);assert.equal(guidance.endpoint,'http://localhost:12444');assert.equal(guidance.examples.length,3);assert.ok(guidance.examples.every((example:{registerCommand:string})=>example.registerCommand.startsWith("OLLAMA_HOST='http://localhost:12444' ")));assert.equal(app.engine.sessions.size,0);assert.equal(invocations.length,0);
+});
+test('disabled cloud provider exposes no cloud setup metadata',async t=>{
+ const before=process.env.KOINOUS_DISABLED_PROVIDERS;process.env.KOINOUS_DISABLED_PROVIDERS='ollama-cloud';t.after(()=>{if(before===undefined)delete process.env.KOINOUS_DISABLED_PROVIDERS;else process.env.KOINOUS_DISABLED_PROVIDERS=before;});
+ const {request}=setup(t);const health=(await request('/api/health')).json();assert.equal(Object.hasOwn(health,'ollamaCloudSetup'),false);assert.ok(!health.availableParticipants.some((p:{provider:string})=>p.provider==='ollama-cloud'));
+});
 test('API exposes defaults and script; concurrent discussions retain independent rosters/models, events and reports',async t=>{
  const {request,finished,invocations,outputDir}=setup(t);
  const health=(await request('/api/health')).json();assert.equal(health.availableProviders.length,5);assert.deepEqual(health.agents,['codex','claude']);assert.equal(health.availableProviders[0].defaultModel,'default-codex');

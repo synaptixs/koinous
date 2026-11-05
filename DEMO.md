@@ -93,7 +93,36 @@ for mixed selections; `--openai-only` disables it.
 
 **Refresh models** reads only the local registry. Cloud names are daemon model
 names, which can differ from direct cloud API names. If the list is empty, add the
-model through Ollama outside synqo and refresh. Refreshing one local slot updates
+model through Ollama outside synqo and refresh. The **Cloud models** list includes
+three **Set up** examples even when no cloud models are registered:
+`gpt-oss:20b-cloud`, `gpt-oss:120b-cloud` and `gemma4:cloud`. These CLI aliases were
+checked against the official model pages on 2026-11-05. Use **Browse all cloud
+models** for Ollama's full catalog; examples do not establish account access or quota.
+
+Choose an example to see its exact terminal instructions. For the default daemon:
+
+```sh
+ollama signin
+ollama pull gpt-oss:20b-cloud
+ollama ls
+```
+
+Sign in only if needed. `pull` registers this cloud reference for synqo's local-daemon
+integration; these commands do not send a model prompt. Keep Ollama running, then
+return to synqo and click **Refresh models**. The example changes from **Set up**
+to **Registered** once the daemon reports it. Starting with an example stays blocked
+until that confirmation. Two cloud participants must use different model IDs.
+The app displays commands and does not execute them, install models or start login.
+For a custom `KOINOUS_OLLAMA_URL`, displayed commands include `OLLAMA_HOST` so they
+target that same daemon. Invalid endpoints produce no executable setup commands.
+
+References: [cloud setup](https://docs.ollama.com/cloud),
+[CLI commands](https://docs.ollama.com/cli),
+[GPT-OSS 20B](https://ollama.com/library/gpt-oss:20b-cloud),
+[GPT-OSS 120B](https://ollama.com/library/gpt-oss:120b-cloud),
+[Gemma 4](https://ollama.com/library/gemma4:cloud).
+
+Refreshing one local slot updates
 all rows currently using Local; a missing model blocks starting a discussion while
 preserving the user's choice. If the list is unavailable, check
 that Ollama is running. If metadata is unsupported or Local/Cloud doesn't match,

@@ -29,6 +29,55 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Ollama Cloud choices and registration help — 2026-11-05 (offline)
+
+The user reported an empty Cloud model picker without setup guidance. A read-only
+workstation registry check found four local models and no cloud registrations.
+The UI now combines registered cloud models and three explicitly labeled Set up
+examples in one list: gpt-oss:20b-cloud, gpt-oss:120b-cloud and gemma4:cloud. These
+are CLI aliases checked against official library pages on 2026-11-05, not a complete
+catalog, account eligibility or quota claim. Links open the full official cloud
+catalog, the selected model page and setup documentation. Local/provider ownership
+continues to use actual daemon metadata, never an inferred suffix.
+
+The server-owned setup model supplies examples, source URLs, verification date and
+commands. Selecting an example fills its model ID and displays signin, pull and ls
+instructions for the user. Commands set OLLAMA_HOST to the same validated loopback
+origin as synqo, including quoted IPv6. Invalid or credential-bearing configured
+endpoints produce no commands or secret echo. The app never executes these commands,
+starts login, pulls/registers models or sends a prompt as a setup action. A setup
+example cannot start until Refresh models confirms its daemon registration. Existing
+custom model aliases and backend transport/capability validation remain compatible.
+
+Empty/error registry responses retain the setup choices and guidance. Registered
+choices remain distinct from unregistered examples; refresh updates matching rows
+without overwriting another provider. Source metadata comes from health only when
+Ollama Cloud is enabled. Protected health/routes retain their existing personal
+daemon isolation. Saved records, model keys and inference/export contracts are unchanged.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | PKG, official docs/catalog and read-only registry diagnosis | Passed |
+| Implement | 25% | Unified cloud list, canonical setup metadata and inline help | Passed |
+| Verify | 25% | TypeScript, 633 Node + 33 Python tests; empty-list browser proof | Passed |
+| Document | 25% | Setup guides, design record and reviewable delivery | Passed |
+
+PKG pre-edit on clean e56d167 (callers/docs): createApplication19/2, UI refresh17/1,
+configureParticipant2/1, addParticipant3/1, showModelChoices2/1. No truncation;
+TS/JS untraced calls are not tracked, counts are floors. Regression gaps flag
+server/demo/start-real/secure-server plus UI setParticipants/openSaved/
+restoreSavedView/module callbacks. New tests cover command/endpoint safety,
+disabled-provider metadata, examples versus registrations, no dispatch before
+confirmation, exact two-cloud-model selection, error recovery and invalid endpoints.
+
+Full offline gate passes. Isolated browser checks use mocked empty registry
+responses with inference disabled: examples are selectable, model-specific commands
+appear, starting remains disabled and the 390px layout has no page-width overflow.
+Development read-only checks accessed local registry metadata and the official public
+cloud catalog; the app itself performs no catalog fetch. No model inference, login,
+pull, registration mutation or live research calls were made. The user's existing
+server was untouched. Overall 48.33% and P6 80% remain unchanged.
+
 ### Workflow layout and execution flow — 2026-11-05 (offline)
 
 The user requested clearer formatting and a more understandable collaboration

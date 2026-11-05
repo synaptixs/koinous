@@ -119,6 +119,12 @@ See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
    Local discussions can start only after an installed model is found; an unlisted local ID cannot
    start a discussion.
    Both rows can use Local or both can use Cloud, with different model IDs.
+   If Cloud has no registered models, the same **Cloud models** list offers three
+   **Set up** examples: GPT-OSS 20B, GPT-OSS 120B and Gemma 4. Choose one to see
+   model-specific `ollama signin` / `ollama pull` instructions, then **Refresh models**
+   to confirm registration. **Browse all cloud models** opens Ollama's full catalog.
+   Examples are setup choices; account access and quota remain unverified.
+   synqo displays the commands and never runs them for you.
 5. Choose the author and start the discussion when ready to use model resources.
    The normal Codex + Claude live launcher also exposes Ollama for mixed pairings.
    OpenAI-only mode keeps other providers disabled.

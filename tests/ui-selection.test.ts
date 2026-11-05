@@ -40,11 +40,35 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const urlGlobals=address?{location:address,history:{replaceState(_state:unknown,_title:string,path:string){address.href=new URL(path,address).href;urlWrites.push(address.href);}}}:{};
   runInNewContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),{document:{getElementById:(id:string)=>elements[id],createElement:(tag:string)=>Object.assign(new Element(),{tagName:tag}),createTextNode:(text:string)=>Object.assign(new Element(),{textContent:text})},fetch,EventSource:FakeEvents,URLSearchParams,...urlGlobals});
   await new Promise(resolve=>setImmediate(resolve));
-  return {elements,get rows(){return elements.participantChoices.children.map(card=>({card,title:card.children[0],provider:card.children[2],model:card.children[4],discovery:card.children[6],picker:card.children[6].children[1],refreshModels:card.children[6].children[2],modelStatus:card.children[6].children[3],remove:card.children[7]}));},requests,streams,historyRequests,address,urlWrites};
+  return {elements,get rows(){return elements.participantChoices.children.map(card=>({card,title:card.children[0],provider:card.children[2],model:card.children[4],discovery:card.children[6],picker:card.children[6].children[1],refreshModels:card.children[6].children[2],modelStatus:card.children[6].children[3],cloudHelp:card.children[6].children[4],cloudHint:card.children[6].children[4].children[1],commands:card.children[6].children[4].children[2],remove:card.children[7]}));},requests,streams,historyRequests,address,urlWrites};
 }
 const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',group:'ollama',requiresInstalledModel:true,defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',group:'ollama',requiresInstalledModel:false,defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
 const mixedHealth={agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:''},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'ollama-local',label:'Ollama Local',defaultModel:''},{id:'ollama-cloud',label:'Ollama Cloud',defaultModel:''}],availableParticipants:[{id:'codex',provider:'codex',label:'OpenAI · Participant 1',defaultModel:''},{id:'codex-2',provider:'codex',label:'OpenAI · Participant 2',defaultModel:''},{id:'claude',provider:'claude',label:'Claude · Participant 1',defaultModel:''},{id:'claude-2',provider:'claude',label:'Claude · Participant 2',defaultModel:''},...ollamaHealth.availableParticipants,{...ollamaHealth.availableParticipants[0],id:'ollama-local-2'},{...ollamaHealth.availableParticipants[1],id:'ollama-cloud-2'}]};
 const noRevision={author:'claude',reviewer:'codex',complete:true,revision:'not-needed',reason:'No material findings.',draft:{recommendation:'Pilot.'},final:null,review:{findings:[]},responses:[],changedFields:[]};
+const setupGuidance={endpoint:'http://127.0.0.1:11434',catalogUrl:'https://ollama.com/search?c=cloud',docsUrl:'https://docs.ollama.com/cloud',signInCommand:"OLLAMA_HOST='http://127.0.0.1:11434' ollama signin",listCommand:"OLLAMA_HOST='http://127.0.0.1:11434' ollama ls",examples:['starter:a-cloud','starter:b-cloud'].map(model=>({model,label:model,url:'https://ollama.com/library/'+model,registerCommand:"OLLAMA_HOST='http://127.0.0.1:11434' ollama pull "+model}))};
+const cloudOnlyHealth={agents:['ollama-cloud','ollama-cloud-2'],availableProviders:[mixedHealth.availableProviders[3]],availableParticipants:[ollamaHealth.availableParticipants[1],{...ollamaHealth.availableParticipants[1],id:'ollama-cloud-2'}],ollamaCloudSetup:setupGuidance};
+test('cloud examples display per-model registration help and require registry confirmation before dispatch',async()=>{
+ let registered=false,metadataCalls=0;
+ const ui=await setup(false,false,undefined,false,undefined,undefined,cloudOnlyHealth,async()=>{metadataCalls++;return {ok:true,json:async()=>({models:registered?setupGuidance.examples.map(example=>example.model):[],total:registered?2:0,source:'local-ollama-registry'})};});
+ assert.equal(metadataCalls,0);assert.equal(ui.rows[0].picker.children.length,3);
+ for(const [i,row] of ui.rows.entries()){
+  row.picker.value=setupGuidance.examples[i].model;row.picker.onchange!();assert.equal(row.model.value,setupGuidance.examples[i].model);assert.equal(row.commands.hidden,false);assert.ok(row.commands.textContent.includes(setupGuidance.examples[i].registerCommand));assert.doesNotMatch(row.commands.textContent,/ollama run|api\/chat|api\/generate/);
+ }
+ assert.equal(ui.elements.run.disabled,true);await ui.elements.run.onclick!();assert.equal(ui.requests.length,0);assert.equal(metadataCalls,0);
+ await ui.rows[0].refreshModels.onclick!();assert.match(ui.rows[0].modelStatus.textContent,/No cloud models registered/);assert.equal(ui.elements.run.disabled,true);
+ registered=true;await ui.rows[0].refreshModels.onclick!();assert.ok(ui.rows.every(row=>/registered on the configured daemon/.test(row.cloudHint.textContent)));assert.equal(ui.elements.run.disabled,false);
+ await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['ollama-cloud','ollama-cloud-2'],models:{'ollama-cloud':'starter:a-cloud','ollama-cloud-2':'starter:b-cloud'}});assert.ok(ui.rows.every(row=>row.picker.disabled));
+});
+test('cloud setup stays visible after registry failure; local and other providers hide it',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{...mixedHealth,ollamaCloudSetup:setupGuidance},async()=>({ok:false,json:async()=>({error:'Start Ollama and refresh.'})}));
+ const row=ui.rows[0];assert.equal(row.cloudHelp.hidden,true);row.provider.value='ollama-cloud';row.provider.onchange!();assert.equal(row.cloudHelp.hidden,false);await row.refreshModels.onclick!();assert.match(row.modelStatus.textContent,/Start Ollama/);assert.equal(row.cloudHelp.hidden,false);
+ row.provider.value='ollama-local';row.provider.onchange!();assert.equal(row.cloudHelp.hidden,true);assert.equal(ui.requests.length,0);
+});
+test('invalid daemon configuration offers browse links but no misleading registration commands',async()=>{
+ const guidance={...setupGuidance,endpoint:null,signInCommand:null,listCommand:null,examples:setupGuidance.examples.map(example=>({...example,registerCommand:null}))};
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{...cloudOnlyHealth,ollamaCloudSetup:guidance});
+ assert.equal(ui.rows[0].picker.disabled,true);assert.equal(ui.rows[0].commands.hidden,true);assert.match(ui.rows[0].cloudHint.textContent,/KOINOUS_OLLAMA_URL/);assert.ok(ui.rows[0].cloudHelp.textContent.includes('Browse all cloud models'));assert.equal(ui.requests.length,0);
+});
 test('workflow preview separates draft, review and conditional revision with attributed models',async()=>{
  const ui=await setup(),e=ui.elements;await e.usePair.onclick!();
  const steps=e.workflowSteps.children;assert.equal(steps.length,3);
