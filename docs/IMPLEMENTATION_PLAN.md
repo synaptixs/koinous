@@ -29,6 +29,49 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Workflow layout and execution flow — 2026-11-05 (offline)
+
+The user requested clearer formatting and a more understandable collaboration
+flow, optionally animated. Workflow and draft author are now separate labeled
+fields. Three connected cards describe draft, targeted review and conditional
+revision, with participant/provider/model and effort on separate lines. The preset
+and optional acceptance checks occupy their own rows. Research fields use the same
+stacked labels. Legacy discussion retains independent views, peer critique and
+revised positions, with unselected rounds marked explicitly.
+
+Only a running step pulses, driven by canonical round.started/round.completed
+events, not a timer pretending to make progress. prefers-reduced-motion disables
+the pulse. A revision is marked not needed only from the recorded targeted
+assessment. Responses received describe execution, not recommendation quality.
+Failures, cancellation, partial records and connection loss stop the animation;
+unknown coverage remains explicit. Editing the planned task/model configuration
+returns the display to a preview; inputs are locked while a run is active. Saved
+events, replies and structured assessments restore execution states without calls.
+Missing third-stage evidence does not imply a skipped revision.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Canonical lifecycle/state semantics and PKG impact | Passed |
+| Implement | 25% | Grouped controls, attributed flow and event-driven animation | Passed |
+| Verify | 25% | TypeScript, 625 Node + 33 Python tests; mock/browser/reopen checks | Passed |
+| Document | 25% | Design rationale, self-contained UI and reviewable delivery | Passed |
+
+PKG measured before editing clean c80f9b9 (callers/docs): UI refresh17/1, finish3/1,
+openSaved2/1. No truncation; JS untraced calls are not tracked, counts are floors.
+Regression gaps identify addParticipant, finish, loadSavedList, openSaved,
+setParticipants, restoreSavedView and module callbacks. Existing VM UI tests are
+not graph-linked; interaction coverage now verifies preview/roles, round-driven
+states, skipped revision evidence, failure/partial/cancel/disconnect, saved legacy
+gaps, changed configuration and selected legacy round limits.
+
+The full offline gate passes. Isolated mock-browser inspection verifies formatted
+desktop controls, an actual workflowPulse animation during the mock draft, two
+received responses followed by canonical not-needed revision, and the same saved
+state after reload. A 390px view has no page-width overflow. All assets/styles are
+local and no dependencies were added. One deterministic mock discussion used
+temporary storage; no real model, login or live research calls were made. The
+user's running server was untouched. Overall 48.33% and P6 80% remain unchanged.
+
 ### Unified participant picker — 2026-11-05 (offline)
 
 The user identified misleading per-provider Participant 1/2 labels and a separate

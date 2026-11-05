@@ -20,7 +20,7 @@ class Element {
   replaceChildren(...children:Element[]){this.children=[...children];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>) {
-  const elements=Object.fromEntries(['researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  const elements=Object.fromEntries(['workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
   const streams:FakeEvents[]=[];
@@ -44,6 +44,50 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
 }
 const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',group:'ollama',requiresInstalledModel:true,defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',group:'ollama',requiresInstalledModel:false,defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
 const mixedHealth={agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:''},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'ollama-local',label:'Ollama Local',defaultModel:''},{id:'ollama-cloud',label:'Ollama Cloud',defaultModel:''}],availableParticipants:[{id:'codex',provider:'codex',label:'OpenAI · Participant 1',defaultModel:''},{id:'codex-2',provider:'codex',label:'OpenAI · Participant 2',defaultModel:''},{id:'claude',provider:'claude',label:'Claude · Participant 1',defaultModel:''},{id:'claude-2',provider:'claude',label:'Claude · Participant 2',defaultModel:''},...ollamaHealth.availableParticipants,{...ollamaHealth.availableParticipants[0],id:'ollama-local-2'},{...ollamaHealth.availableParticipants[1],id:'ollama-cloud-2'}]};
+const noRevision={author:'claude',reviewer:'codex',complete:true,revision:'not-needed',reason:'No material findings.',draft:{recommendation:'Pilot.'},final:null,review:{findings:[]},responses:[],changedFields:[]};
+test('workflow preview separates draft, review and conditional revision with attributed models',async()=>{
+ const ui=await setup(),e=ui.elements;await e.usePair.onclick!();
+ const steps=e.workflowSteps.children;assert.equal(steps.length,3);
+ assert.match(steps[0].textContent,/Draft.*Anthropic Claude.*claude-sonnet-5-5.*low effort/);
+ assert.match(steps[1].textContent,/Targeted review.*OpenAI Codex.*gpt-6-astra.*medium effort/);
+ assert.match(steps[2].textContent,/Revision if needed.*If needed.*claude-sonnet-5-5/);
+ assert.ok(steps.every(step=>!step.className.includes('is-active')));assert.match(e.workflowProgress.textContent,/Planned flow/);
+ assert.equal(e.authorField.hidden,false);assert.equal(e.acceptanceField.hidden,false);assert.equal(ui.requests.length,0);
+});
+test('workflow animation follows round events and skips revision only on explicit assessment',async()=>{
+ const ui=await setup(),e=ui.elements;await e.usePair.onclick!();await e.run.onclick!();
+ const send=(event:Record<string,unknown>)=>ui.streams[0].onmessage!({data:JSON.stringify(event)});
+ send({type:'round.started',round:1,stage:'draft'});assert.match(e.workflowSteps.children[0].className,/is-active/);assert.equal(e.workflowSteps.children[0].attributes['aria-current'],'step');
+ send({type:'round.completed',round:1,stage:'draft'});assert.match(e.workflowSteps.children[0].textContent,/Response received/);assert.ok(e.workflowSteps.children.every(step=>!step.className.includes('is-active')));
+ send({type:'round.started',round:2,stage:'review'});assert.match(e.workflowSteps.children[1].className,/is-active/);
+ send({type:'round.completed',round:2,stage:'review'});assert.doesNotMatch(e.workflowSteps.children[2].textContent,/Not needed/);
+ send({type:'targeted.assessed',targeted:noRevision});send({type:'session.finished',status:'completed',spendKnownUSD:0});
+ assert.match(e.workflowSteps.children[2].textContent,/Not needed/);assert.match(e.workflowSteps.children[2].className,/is-skipped/);assert.match(e.workflowProgress.textContent,/completed.*not recommendation quality/);
+});
+for(const status of ['failed','partial','cancelled'])test(`workflow ${status} stops animation without inventing a skipped revision`,async()=>{
+ const ui=await setup(),e=ui.elements;await e.usePair.onclick!();await e.run.onclick!();
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'round.started',round:1,stage:'draft'})});
+ if(status==='failed')ui.streams[0].onmessage!({data:JSON.stringify({type:'agent.error',round:1,agent:'claude',error:'Synthetic failure'})});
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status,spendKnownUSD:0})});
+ assert.ok(e.workflowSteps.children.every(step=>!step.className.includes('is-active')));assert.doesNotMatch(e.workflowSteps.children[2].textContent,/Not needed/);assert.match(e.workflowProgress.textContent,new RegExp(status));
+});
+test('workflow connection loss removes the running animation and labels progress unknown',async()=>{
+ const ui=await setup(),e=ui.elements;await e.usePair.onclick!();await e.run.onclick!();
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'round.started',round:2,stage:'review'})});ui.streams[0].onerror!();
+ assert.ok(e.workflowSteps.children.every(step=>!step.className.includes('is-active')));assert.match(e.workflowSteps.children[1].textContent,/Status unknown/);assert.match(e.workflowProgress.textContent,/may still be running/);assert.equal(e.run.disabled,true);
+});
+test('saved flow restores execution without calls and missing revision evidence stays explicit',async()=>{
+ const base={id:'saved-id',prompt:'Saved flow',maxRounds:3,workflowMode:'targeted',targetedConfig:{author:'claude',checks:[]},status:'completed',readOnly:true,calls:2,spendKnownUSD:0,selection:{providers:['codex','claude'],models:{codex:'astra',claude:'sonnet'}},entries:[{agent:'claude',round:1,text:'Recorded draft'},{agent:'codex',round:2,text:'Recorded review'}]};
+ const legacy=await setup(false,false,base);legacy.elements.savedSessions.value='saved-id';await legacy.elements.openSaved.onclick!();
+ assert.match(legacy.elements.workflowSteps.children[0].textContent,/Response received/);assert.match(legacy.elements.workflowSteps.children[2].textContent,/Not recorded/);assert.doesNotMatch(legacy.elements.workflowSteps.children[2].textContent,/Not needed/);
+ const saved=await setup(false,false,{...base,targeted:noRevision});saved.elements.savedSessions.value='saved-id';await saved.elements.openSaved.onclick!();assert.match(saved.elements.workflowSteps.children[2].textContent,/Not needed/);assert.match(saved.elements.workflowProgress.textContent,/Saved run/);assert.equal(saved.requests.length,0);assert.equal(saved.streams.length,0);
+ saved.rows[0].model.value='another-model';saved.rows[0].model.oninput!();assert.match(saved.elements.workflowProgress.textContent,/Planned flow/);assert.doesNotMatch(saved.elements.workflowSteps.children[2].textContent,/Not needed/);
+});
+test('legacy workflow respects selected rounds and hides targeted-only fields',async()=>{
+ const ui=await setup(),e=ui.elements;e.rounds.value='1';e.rounds.onchange!();
+ assert.equal(e.authorField.hidden,true);assert.equal(e.acceptanceField.hidden,true);assert.match(e.workflowSteps.children[0].textContent,/Independent views.*All selected participants/);
+ assert.match(e.workflowSteps.children[1].textContent,/Peer critique.*Not selected/);assert.match(e.workflowSteps.children[2].textContent,/Revised positions.*Not selected/);assert.equal(e.plannedCalls.textContent,2);
+});
 test('one participant list numbers rows globally and offers Ollama in the same provider selector',async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth);
  assert.equal(ui.rows.length,2);
@@ -104,7 +148,7 @@ test('Ollama UI explicitly refreshes metadata, selects models and records defaul
  assert.equal(metadataRequests.length,0);assert.equal(f.elements.run.disabled,true);
  for(const row of f.rows){await row.refreshModels.onclick!();row.picker.value='registered-model';row.picker.onchange!();assert.match(row.modelStatus.textContent,/1 of 1 registered models/);}
  assert.deepEqual(metadataRequests,['/api/models?provider=ollama-local','/api/models?provider=ollama-cloud']);
- f.elements.workflowMode.value='targeted';f.elements.workflowMode.onchange!();assert.match(f.elements.roleNote.textContent,/model default effort/);assert.doesNotMatch(f.elements.roleNote.textContent,/low effort|medium effort/);assert.equal(f.elements.run.disabled,false);
+ f.elements.workflowMode.value='targeted';f.elements.workflowMode.onchange!();assert.match(f.elements.workflowSteps.textContent,/model default effort/);assert.doesNotMatch(f.elements.workflowSteps.textContent,/low effort|medium effort/);assert.equal(f.elements.run.disabled,false);
  await f.elements.run.onclick!();assert.equal(f.requests.length,1);assert.deepEqual(f.requests[0].selection,{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'registered-model','ollama-cloud':'registered-model'}});
  assert.ok(f.rows.every(row=>row.picker.disabled&&row.refreshModels.disabled&&row.provider.disabled));
 });
@@ -162,7 +206,7 @@ test('saved Ollama selection and accounting reopen without model discovery or in
  const f=await setup(false,false,saved,true,undefined,undefined,ollamaHealth,async()=>{throw Error('Saved view must not discover models');});
  await f.elements.openSaved.onclick!(); // No selected history ID yet.
  f.elements.savedSessions.value='saved-id';await f.elements.openSaved.onclick!();
- assert.equal(f.rows[0].model.value,'saved-local');assert.equal(f.rows[1].model.value,'saved-cloud');assert.match(f.elements.tokenTotals.textContent,/120/);assert.equal(f.requests.length,0);assert.match(f.elements.roleNote.textContent,/model default effort/);
+ assert.equal(f.rows[0].model.value,'saved-local');assert.equal(f.rows[1].model.value,'saved-cloud');assert.match(f.elements.tokenTotals.textContent,/120/);assert.equal(f.requests.length,0);assert.match(f.elements.workflowSteps.textContent,/model default effort/);
 });
 test('UI hydrates only participating rows and requires a provider and valid model for every row',async()=>{
  const {elements,rows,requests}=await setup();

@@ -47,6 +47,7 @@ let sessionId = null, events = null, ready = false, busy = false, inferenceEnabl
 const rows = [];
 let participantOptions = [], providerOptions = [], nextRow = 0;
 const modelLists = new Map(), modelQueries = new Map();
+let workflowProgress = null;
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
 let historyFilters = {provider:'', model:'', from:'', to:''};
 function selectedHistoryFilters() { return {provider:$('savedProvider').value, model:$('savedModel').value.trim(), from:$('savedFrom').value, to:$('savedTo').value}; }
@@ -64,11 +65,7 @@ function refresh(preferredAuthor) {
   $('author').replaceChildren();
   for(const row of selected){const option=viewNode('option',participantLabel(row));option.value=row.id;$('author').append(option);}
   $('author').value=chosen.providers.includes(previousAuthor)?previousAuthor:chosen.providers.includes('claude')?'claude':chosen.providers[0]||'';
-  $('stageTags').replaceChildren();for(const label of targeted?['1 · Draft','2 · Targeted review','3 · Revision if needed']:['1 · Independent','2 · Critique','3 · Collaborate'])$('stageTags').append(viewNode('span',label,'tag'));
-  const effort=(id,role)=>rows.find(row=>row.id===id)?.effortMode==='model-default'?'model default effort':role+' effort';
-  const reviewer=chosen.providers.find(id=>id!==$('author').value)||'unselected';
-  const roleLabel=id=>{const row=rows.find(r=>r.id===id);return row?participantLabel(row):'unselected';};
-  $('roleNote').textContent=targeted?'Author: '+roleLabel($('author').value)+' · '+effort($('author').value,'low')+'; reviewer: '+roleLabel(reviewer)+' · '+effort(reviewer,'medium')+'. Fresh requests; at most three calls.':'Full discussion: participants exchange independent positions over the selected rounds.';
+  renderWorkflowFlow();
   const missingOllama=selected.some(row=>row.modelDiscovery&&!(row.model.value.trim()||row.defaultModel));
   const unavailableLocal=selected.some(row=>row.requiresInstalledModel&&!row.availableModels.includes(row.model.value.trim()||row.defaultModel));
   const unavailableResearch=['web','both'].includes($('researchMode').value)&&!webSearchAvailable;
@@ -81,7 +78,7 @@ function refresh(preferredAuthor) {
   $('previousSaved').disabled = busy || historyLoading || !historyPrevious;
   $('nextSaved').disabled = busy || historyLoading || !historyNext;
   $('rounds').disabled = busy || targeted;
-  for(const id of ['workflowMode','author','acceptanceChecks'])$(id).disabled=busy;
+  for(const id of ['question','context','workflowMode','author','acceptanceChecks'])$(id).disabled=busy;
   $('usePair').disabled=busy||!participantOptions.some(r=>r.id==='claude')||!participantOptions.some(r=>r.id==='codex');
   for(const id of ['researchMode','researchQuery']) $(id).disabled = busy;
   $('addParticipant').hidden=targeted;
@@ -212,6 +209,72 @@ function appendResponse(entry) {
   const raw=node('details',undefined,'response-original');raw.append(node('summary','Original response'),node('pre',original));card.append(raw);
   $('feed').append(card);
 }
+function workflowKey() {
+  return JSON.stringify({mode:$('workflowMode').value,author:$('author').value,rounds:$('rounds').value,selection:selection(),prompt:$('question').value,context:$('context').value,checks:$('acceptanceChecks').value,research:$('researchMode').value,query:$('researchQuery').value});
+}
+function renderWorkflowFlow() {
+  const targeted=$('workflowMode').value==='targeted',author=rows.find(row=>row.id===$('author').value),reviewer=rows.find(row=>row.id&&row!==author);
+  const progress=workflowProgress?.key===workflowKey()?workflowProgress:null;
+  const titles=targeted?['Draft','Targeted review','Revision if needed']:['Independent views','Peer critique','Revised positions'];
+  const descriptions=targeted?['The author proposes a recommendation.','The other model checks for consequential mistakes.','The author responds only to material findings.']:['Each participant develops its own recommendation.','Participants challenge the other recommendations.','Participants respond to critiques and state their final positions.'];
+  $('roleNote').textContent=targeted?'Two calls by default. A third call runs only when the review identifies material findings. Each step uses a fresh request.':'Participants exchange views over the selected rounds. Each round includes every selected participant.';
+  $('authorField').hidden=!targeted;$('acceptanceField').hidden=!targeted;
+  $('workflowSteps').replaceChildren();$('stageTags').replaceChildren();
+  for(let index=0;index<3;index++){
+    const round=index+1,owner=targeted?(index===1?reviewer:author):null;
+    const selected=targeted||round<=Number($('rounds').value);
+    let state='planned',label=targeted&&round===3?'If needed':'Planned';
+    if(!selected){state='skipped';label='Not selected';}
+    else if(progress){
+      if(round===3&&targeted&&progress.revision==='not-needed'){state='skipped';label='Not needed';}
+      else if(progress.done.has(round)){state='done';label='Response received';}
+      else if(progress.status==='Connection lost'){state='unknown';label='Status unknown';}
+      else if(progress.active===round){state='active';label='Running';}
+      else if(progress.stopped.has(round)){state='stopped';label='Stopped';}
+      else if(['completed','partial','failed','cancelled','Failed to start'].includes(progress.status)){state='unknown';label=progress.started.has(round)?'Incomplete':progress.saved?'Not recorded':'Not reached';}
+      else label='Waiting';
+    }
+    const step=viewNode('li',undefined,'workflow-step is-'+state),top=viewNode('div',undefined,'workflow-step-top');
+    top.append(viewNode('span',String(round),'workflow-step-number'),viewNode('h3',titles[index]));
+    const status=viewNode('span',label,'workflow-step-state');if(state==='active')step.setAttribute('aria-current','step');
+    step.append(top,status,viewNode('p',descriptions[index],'workflow-step-description'));
+    if(targeted){
+      step.append(viewNode('p',owner?providerOptions.find(option=>option.id===owner.provider)?.label||owner.id:'Choose a participant','workflow-step-provider'));
+      step.append(viewNode('p',owner?(owner.model.value.trim()||owner.defaultModel||'SDK default'):'Model not selected','workflow-step-model'));
+      step.append(viewNode('small',(owner?'Participant '+(rows.indexOf(owner)+1)+' · ':'')+(owner?.effortMode==='model-default'?'model default effort':index===1?'medium effort':'low effort')));
+    }else step.append(viewNode('p','All selected participants','workflow-step-provider'));
+    $('workflowSteps').append(step);$('stageTags').append(viewNode('span',round+' · '+titles[index]+' · '+label,'tag'));
+  }
+  const notice=progress?(progress.status==='Connection lost'?'Connection lost. Progress is unknown; the discussion may still be running.':(progress.saved?'Saved run · ':'')+progress.status+'. Step status describes execution, not recommendation quality.'):'Planned flow · starting a discussion uses model resources.';
+  if($('workflowProgress').textContent!==notice)$('workflowProgress').textContent=notice;
+}
+function beginWorkflowProgress(saved) {
+  workflowProgress={key:workflowKey(),active:null,started:new Set(),done:new Set(),stopped:new Set(),status:saved?.status||'Preparing',revision:saved?.targeted?.revision||null,saved:!!saved};
+  if(!saved)return;
+  for(const event of saved.events||[])recordWorkflowEvent(event);
+  // Older records have canonical replies/assessment even when their event stream is absent.
+  const expected=saved.workflowMode==='targeted'?1:saved.selection?.providers.length;
+  for(let round=1;round<=3;round++){
+    const replies=new Set((saved.entries||[]).filter(entry=>entry.round===round&&(!saved.selection||saved.selection.providers.includes(entry.agent))).map(entry=>entry.agent));
+    if(replies.size)workflowProgress.started.add(round);
+    if(expected&&replies.size>=expected)workflowProgress.done.add(round);
+  }
+  if(saved.targeted?.draft)workflowProgress.done.add(1);
+  if(saved.targeted?.review)workflowProgress.done.add(2);
+  if(saved.targeted?.revision==='completed')workflowProgress.done.add(3);
+  workflowProgress.active=null;workflowProgress.status=saved.status;
+}
+function recordWorkflowEvent(event) {
+  if(!workflowProgress)return;
+  if(event.type==='round.started'){workflowProgress.active=event.round;workflowProgress.started.add(event.round);workflowProgress.status='Running';}
+  if(event.type==='round.completed'){workflowProgress.done.add(event.round);if(workflowProgress.active===event.round)workflowProgress.active=null;}
+  if(event.type==='targeted.assessed')workflowProgress.revision=event.targeted.revision;
+  if(event.type==='agent.error'||event.type==='session.error'){
+    if(event.round||workflowProgress.active)workflowProgress.stopped.add(event.round||workflowProgress.active);
+    workflowProgress.active=null;workflowProgress.status='Stopping';
+  }
+  if(event.type==='session.finished'){workflowProgress.status=event.status;workflowProgress.active=null;}
+}
 function participantLabel(row) {
   const label=providerOptions.find(option=>option.id===row.provider)?.label||row.id||'Choose provider';
   return 'Participant '+(rows.indexOf(row)+1)+' · '+label+' · '+(row.model.value.trim()||row.defaultModel||'SDK default');
@@ -305,9 +368,11 @@ const configurationReady = fetch('/api/health').then(async response => {
 $('rounds').onchange = refresh;
 $('workflowMode').onchange=refresh;$('author').onchange=refresh;
 $('researchMode').onchange=refresh;
+for(const id of ['question','context','acceptanceChecks','researchQuery'])$(id).oninput=refresh;
 $('addParticipant').onclick=()=>{if(!busy&&ready&&$('workflowMode').value!=='targeted'){addParticipant();refresh();}};
 $('usePair').onclick=()=>{if(busy||$('usePair').disabled)return;setParticipants({providers:['codex','claude'],models:{codex:'gpt-6-astra',claude:'claude-sonnet-5-5'}});$('workflowMode').value='targeted';refresh('claude');};
 function finish(status) {
+  if(workflowProgress){workflowProgress.status=status;workflowProgress.active=null;}
   busy = false; $('status').textContent = status; $('send').disabled = true; $('cancel').disabled = true;
   if (events) events.close(); refresh();
 }
@@ -316,7 +381,7 @@ $('run').onclick = async () => {
   const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection(),workflowMode:$('workflowMode').value};
   if(request.workflowMode==='targeted'){request.maxRounds=3;request.author=$('author').value;request.checks=$('acceptanceChecks').value.split('\n').map(s=>s.trim()).filter(Boolean);}
   if(['wikipedia','web','both'].includes($('researchMode').value))request.research={mode:$('researchMode').value,query:$('researchQuery').value};
-  sessionId = null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; refresh();
+  beginWorkflowProgress();sessionId = null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; refresh();
   if (events) events.close();
   $('outcome').textContent = 'Available after the discussion.'; $('evidence').textContent = 'Idea and optional context';
   $('feed').replaceChildren(); $('status').textContent = 'Creating'; $('calls').textContent = '0'; $('cost').textContent = 'Unknown'; $('report').style.display = 'none';$('jsonReport').style.display='none';$('tokenTotals').textContent='Awaiting token accounting';$('tokenDetails').replaceChildren();
@@ -326,7 +391,7 @@ $('run').onclick = async () => {
     sessionId = data.id; $('send').disabled = request.workflowMode==='targeted'; $('cancel').disabled = false;
     events = new EventSource('/api/sessions/' + sessionId + '/events');
     events.onmessage = event => {
-      const x = JSON.parse(event.data);
+      const x = JSON.parse(event.data);recordWorkflowEvent(x);renderWorkflowFlow();
       switch (x.type) {
         case 'participants.configured': $('maxCalls').textContent = x.maxCalls; append('Selected participants', x.agents.map(id => id + ': ' + (x.selection?.models[id] || 'SDK default')).join('\n')); break;
         case 'runtime.preparing': $('status').textContent = 'Preparing runtime'; append('Runtime · ' + x.agent, 'Provisioning and verifying the isolated runtime before model calls'); break;
@@ -350,7 +415,7 @@ $('run').onclick = async () => {
         case 'session.finished': showTokens(x.tokenAccounting); finish(x.status);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline'; $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline'; syncSavedURL(); break;
       }
     };
-    events.onerror = () => { append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost'; };
+    events.onerror = () => { append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost';if(workflowProgress){workflowProgress.active=null;workflowProgress.status='Connection lost';renderWorkflowFlow();} };
   } catch (error) { append('Error', error.message); finish('Failed to start'); }
 };
 $('send').onclick = async () => {
@@ -484,7 +549,7 @@ async function openSaved(id) {
     $('researchMode').value=s.research?.mode||(s.workflow?.research.status==='completed'?'wikipedia':'none');
     $('researchQuery').value=s.research?.query||s.workflow?.research.query||'';
     if (s.selection) setParticipants(s.selection);
-    refresh(s.targetedConfig?.author);
+    refresh(s.targetedConfig?.author);beginWorkflowProgress(s);renderWorkflowFlow();
     $('calls').textContent = s.calls; $('maxCalls').textContent = s.maxCalls ?? 'Unknown';
     $('cost').textContent = '$' + Number(s.spendKnownUSD).toFixed(4) + (s.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)');
     $('evidence').textContent = s.evidence ? s.evidence.id : 'Idea and optional context';
