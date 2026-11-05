@@ -23,7 +23,7 @@
 
 ---
 
-# synqo — better ideas together
+# synqo · Collaborative research
 
 > **Current product direction (2026-11-01):** discuss an idea with two or three model participants using subscription login, exchange critiques, and produce one recommendation with explicit agreement and unresolved dissent. An idea alone is sufficient; optional context is supported. The active roadmap is W1–W6 in docs/IMPLEMENTATION_PLAN.md. Enterprise hardening and PKG are deferred. Earlier P0–P6 and PKG sections below are historical/optional engineering work, not prerequisites.
 >

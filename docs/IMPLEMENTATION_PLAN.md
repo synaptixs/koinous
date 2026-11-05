@@ -29,6 +29,62 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Light translucent theme — 2026-11-05 (offline)
+
+The user requested a lighter, possibly translucent UI. The page now uses a pale
+blue/lavender background, frosted white panels, dark slate text and blue controls.
+Recommendation, transcript, tables, notices, peer decisions and original-response
+details use the same light palette. CSS declares a light native control scheme,
+visible keyboard focus, an opaque panel fallback when blur is unavailable and
+solid panels for reduced-transparency preferences. No external assets or new
+dependencies are introduced. Discussion markup, IDs and behavior are unchanged.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Guidance, clean current PR and PKG/CSS ownership | Passed |
+| Implement | 25% | Light palette, translucent panels, readable component states | Passed |
+| Verify | 25% | TypeScript, 611 Node + 33 Python tests; desktop/saved/mobile views | Passed |
+| Document | 25% | Design record and existing branding PR update | Passed |
+
+PKG was consulted first. file_insights reports no function/class nodes in
+public/index.html (zero shown, no truncation); this CSS-only change has no
+callable-symbol blast radius or regression-gap result. Selectors and markup were
+checked directly. Browser inspection covered the initial page, a saved synthetic
+recommendation and its controls, plus the 390px layout (no page-width overflow).
+No new CSS-mirroring tests were added. Full offline gate passes; no model, login
+or live research calls. Existing user server remains untouched. Overall 48.33%
+and P6 80% remain unchanged.
+
+### Collaborative research branding — 2026-11-05 (offline)
+
+The user selected research/collaboration wording. Browser title, visible heading
+and current README/reference headings now use **synqo · Collaborative research**.
+The provider placeholder no longer says shared inquiry. Stable repository, package,
+configuration and saved-session identifiers remain unchanged.
+
+The reported old title was reproduced on port 3030: its process used the older
+`/Users/falcon/projects/koinous` checkout at aa94689 (PR #13), rather than the
+updated development checkout at 02352b0. UI assets are loaded at server startup.
+The README now explains updating the actual serving checkout and restarting it;
+HTML and app.js responses use `Cache-Control: no-store` to prevent stale browser
+assets after restart. Existing CSP and protected-route authentication are preserved.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Reproduce old title, identify checkout, measure PKG impact | Passed |
+| Implement | 25% | Current branding and HTML/JS cache headers | Passed |
+| Verify | 25% | TypeScript, 611 Node tests + 33 Python tests; browser preview | Passed |
+| Document | 25% | Update/restart instructions and design record | Passed |
+
+Measured pre-edit on clean 02352b0: createApplication has 19 bound callers and two
+matching docs. No truncation; untraced TS/JS calls are not tracked, so callers are
+a floor. Regression gaps identify server/demo/start-real/secure-server entry paths.
+The API regression verifies the served title, heading, cache headers and zero model
+invocations; the complete offline gate passes. The isolated mock browser confirms
+the new title and heading. No model, login or live research calls were made. The
+user's existing real-mode server was inspected read-only and was not interrupted.
+Overall 48.33% and P6 80% remain unchanged.
+
 ### Optional web/Wikipedia research and account wording — 2026-11-05 (offline)
 
 The user selected Brave Search API for optional web research. The UI offers None

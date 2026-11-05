@@ -43,8 +43,8 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
   try{
     // Do not accept browser cross-origin POSTs to this localhost service.
     if(req.method==='POST'&&req.headers.origin){const origin=new URL(req.headers.origin);if(!(['localhost','127.0.0.1'].includes(origin.hostname)&&Number(origin.port)===port)){return json(res,403,{error:'Origin denied'});}}
-    if(req.method==='GET'&&url.pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'"});return res.end(html);}
-    if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(script);}
+    if(req.method==='GET'&&url.pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'"});return res.end(html);}
+    if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(script);}
     if(req.method==='GET'&&url.pathname==='/api/models'){
       const provider=url.searchParams.get('provider')||'';
       if(!isOllama(provider)||!enabledProviders().includes(provider))return json(res,400,{error:'Choose an enabled Ollama provider'});
