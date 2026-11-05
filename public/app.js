@@ -52,6 +52,47 @@ let workflowProgress = null;
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
 let historyFilters = {provider:'', model:'', from:'', to:''};
 let pendingSavedSession = null;
+let workspaceView='new',reviewingSaved=false,draftConfiguration=null,sessionAttempted=false;
+const configurationFields=['question','context','rounds','workflowMode','author','acceptanceChecks','researchMode','researchQuery'];
+function captureConfiguration(){return {fields:Object.fromEntries(configurationFields.map(id=>[id,$(id).value])),rows:rows.map(row=>({id:row.id,model:row.model.value,customMode:row.customMode})),contextOpen:$('contextDetails').open,advancedOpen:$('advancedSettings').open};}
+function restoreConfiguration(snapshot){
+  for(const [id,value] of Object.entries(snapshot.fields))$(id).value=value;
+  rows.splice(0);$('participantChoices').replaceChildren();
+  for(const saved of snapshot.rows){const row=addParticipant(participantOptions.find(option=>option.id===saved.id),saved.model);row.customMode=saved.customMode;}
+  $('contextDetails').open=snapshot.contextOpen;$('advancedSettings').open=snapshot.advancedOpen;refresh(snapshot.fields.author);
+}
+function resetSessionView(){
+  if(events)events.close();events=null;sessionId=null;pendingSavedSession=null;workflowProgress=null;sessionAttempted=false;
+  $('feed').replaceChildren();$('outcome').textContent='Available after the discussion.';$('tokenDetails').replaceChildren();$('tokenTotals').textContent='Token usage not recorded yet.';
+  $('status').textContent='Idle';$('calls').textContent='0';$('cost').textContent='Unknown';$('evidence').textContent='—';$('reviewNotice').textContent='';$('intervene').value='';
+  for(const id of ['report','jsonReport']){$(id).style.display='none';$(id).href='#';}
+  $('saveStatus').textContent='Discussions save automatically when finished.';$('send').disabled=true;$('cancel').disabled=true;
+  $('savedConfiguration').replaceChildren();$('savedConfiguration').hidden=true;
+}
+function showSavedConfiguration(saved){
+  const root=$('savedConfiguration');root.replaceChildren(viewNode('h3','Recorded setup'),readableText(saved.prompt));
+  root.append(viewNode('p',(saved.workflowMode==='targeted'?'Draft + targeted review':'Full discussion')+' · '+(saved.selection?rows.map(participantLabel).join(' + '):'Participants not recorded.')));
+  if(saved.targetedConfig)root.append(viewNode('p','Draft author: '+saved.targetedConfig.author));
+  const details=viewDetails('Context, criteria and research');
+  details.append(viewNode('h4','Supplied context'),readableText(saved.context||'No additional context recorded.'),viewNode('h4','Review criteria'));
+  details.append(saved.targetedConfig?.checks?.length?viewList(saved.targetedConfig.checks):viewNode('p','No explicit review criteria recorded.'));
+  details.append(viewNode('h4','Research'),viewNode('p',saved.research?saved.research.mode+' · '+saved.research.query:saved.workflow?.research?.query||'No research request recorded.'));
+  root.append(details);root.hidden=false;
+}
+function renderWorkspace(){
+  $('newWorkspace').hidden=workspaceView!=='new'||reviewingSaved;$('historyWorkspace').hidden=workspaceView!=='saved';
+  $('sessionResults').hidden=workspaceView==='saved'?!reviewingSaved:!sessionId&&!sessionAttempted;
+  $('workspaceTitle').textContent=workspaceView==='saved'?'Saved discussions':'Configure your discussion';
+  $('workspaceSubtitle').textContent=workspaceView==='saved'?'Open recorded discussions for read-only review. Your setup draft is preserved.':'Choose your models and sources, then describe your decision.';
+  for(const [id,view] of [['navNew','new'],['navSaved','saved']]){$(id).className='nav-button'+(workspaceView===view?' is-current':'');$(id).setAttribute('aria-pressed',String(workspaceView===view));$(id).disabled=busy||historyLoading;}
+}
+function navigateWorkspace(view){
+  if(busy||historyLoading)return;
+  if(view==='saved')$('workspaceNotice').textContent='';
+  if(view==='new'&&(reviewingSaved||sessionId||sessionAttempted)){const snapshot=draftConfiguration;reviewingSaved=false;draftConfiguration=null;resetSessionView();if(snapshot)restoreConfiguration(snapshot);$('workspaceNotice').textContent=snapshot?'Your setup draft was restored. The saved discussion is unchanged.':'';}
+  workspaceView=view;$('workspaceNotice').hidden=!$('workspaceNotice').textContent;refresh();syncSavedURL();
+  $('workspaceTitle').focus?.({preventScroll:true});$('workspaceTitle').scrollIntoView?.({block:'start'});
+}
 function selectedHistoryFilters() { return {provider:$('savedProvider').value, model:$('savedModel').value.trim(), from:$('savedFrom').value, to:$('savedTo').value}; }
 function selection() {
   const selected = rows.filter(row => row.id);
@@ -73,9 +114,15 @@ function refresh(preferredAuthor) {
   const pendingCloudSetup=selected.some(row=>row.provider==='ollama-cloud'&&cloudSetup?.examples.some(example=>example.model===row.model.value.trim())&&!row.availableModels.includes(row.model.value.trim()));
   const unavailableResearch=['web','both'].includes($('researchMode').value)&&!webSearchAvailable;
   const unavailableParticipant=rows.some(row=>!row.id||!participantOptions.some(option=>option.id===row.id));
-  const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : pendingCloudSetup ? 'Register the selected cloud setup example in Ollama, then Refresh models to confirm it.' : missingModel ? 'Choose a model for every participant.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const researchEnabled=['wikipedia','web','both'].includes($('researchMode').value),badQuery=researchEnabled&&(!$('researchQuery').value.trim()||$('researchQuery').value.length>300),missingIdea=!$('question').value.trim();
+  const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : pendingCloudSetup ? 'Register the selected cloud setup example in Ollama, then Refresh models to confirm it.' : missingModel ? 'Choose a model for every participant.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : badQuery?'Enter public search keywords (1–300 characters).':missingIdea?'Describe your idea before starting.':'';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
-  $('run').disabled = busy || historyLoading || !!error || !inferenceEnabled;
+  $('run').disabled = busy || historyLoading || reviewingSaved || workspaceView!=='new' || !!error || !inferenceEnabled;
+  $('researchQueryField').hidden=!researchEnabled;$('researchError').textContent=badQuery?'Enter a public query of 1–300 characters.':'';$('researchQuery').setAttribute('aria-invalid',String(badQuery));
+  $('ideaError').textContent=missingIdea?'An idea is required to start.':'';$('question').setAttribute('aria-invalid',String(missingIdea));
+  $('setupState').textContent=workspaceView==='saved'?(reviewingSaved?'Read-only review':'Saved history'):busy?'Discussion running':error?'Setup needed':!inferenceEnabled?'Inference disabled':'Ready to start';$('setupState').className='setup-state'+(!error&&!busy&&inferenceEnabled&&workspaceView==='new'?' is-ready':'');
+  const researchLabel={none:'research off',wikipedia:'Wikipedia',web:'Brave web search',both:'Wikipedia + Brave'}[$('researchMode').value]||'research off';
+  $('runConfigurationSummary').textContent=rows.length+' participants · '+rows.map(row=>(providerOptions.find(option=>option.id===row.provider)?.label||'provider not chosen')+' / '+(row.model.value.trim()||'model not chosen')).join(' + ')+' · '+(targeted?'Draft + review':'Full discussion')+' · '+researchLabel;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
   for (const id of ['savedProvider','savedModel','savedFrom','savedTo','savedSessions','refreshSaved','savedSearch','searchSaved','clearSaved']) $(id).disabled = busy || historyLoading;
   $('previousSaved').disabled = busy || historyLoading || !historyPrevious;
@@ -84,8 +131,6 @@ function refresh(preferredAuthor) {
   for(const id of ['question','context','workflowMode','author','acceptanceChecks'])$(id).disabled=busy;
   $('usePair').disabled=busy||!participantOptions.some(r=>r.id==='claude')||!participantOptions.some(r=>r.id==='codex');
   for(const id of ['researchMode','researchQuery']) $(id).disabled = busy;
-  $('addParticipant').hidden=targeted;
-  $('addParticipant').disabled=busy||!ready||rows.length>=3||participantOptions.length<3;
   $('participantCount').value=String(rows.length>=2?rows.length:2);
   $('participantCount').disabled=busy||!ready;
   for(const option of $('participantCount').children)if(option.value==='3')option.disabled=participantOptions.length<3;
@@ -97,19 +142,22 @@ function refresh(preferredAuthor) {
     row.providerSelect.setAttribute('aria-label','Participant '+number+' provider');
     row.model.setAttribute('aria-label','Participant '+number+' model ID');
     row.modelPicker.setAttribute('aria-label','Participant '+number+(row.provider==='ollama-cloud'?' cloud models':row.provider==='ollama-local'?' registered models':' model'));
-    row.remove.setAttribute('aria-label','Remove participant '+number);
-    row.providerSelect.disabled=busy;row.model.disabled=busy||!row.id;row.modelPicker.disabled=busy||!row.id||(row.provider==='ollama-cloud'&&cloudSetup&&!cloudSetup.endpoint);
-    row.refreshModels.disabled=busy||modelQueries.has(row.provider);
-    row.remove.hidden=rows.length<=2;row.remove.disabled=busy;
+    row.role.textContent=targeted?(row.id===$('author').value?'Draft author':'Reviewer'):'Full discussion';
+    row.providerSelect.disabled=busy;row.model.disabled=busy||!row.id;row.modelPicker.disabled=busy||!row.id||(row.provider==='ollama-cloud'&&cloudSetup&&!cloudSetup.endpoint)||(!row.availableModels.length&&!row.model.value.trim()&&!(row.provider==='ollama-cloud'&&cloudSetup?.examples.length));
+    row.refreshModels.disabled=busy||!row.id||modelQueries.has(row.provider);
     row.model.hidden=!row.customMode;row.modelLabel.hidden=!row.customMode;row.customButton.disabled=busy||!row.id;
     row.refreshModels.textContent=!row.provider.startsWith('ollama-')&&!modelLists.has(row.provider)?'Load models':'Refresh models';
     row.refreshModels.setAttribute('aria-label',row.refreshModels.textContent+' for participant '+number);
     row.modelPicker.value=row.model.value.trim();
+    const modelId=row.model.value.trim();
+    const rowError=!row.id?'Choose an available provider.':!modelId?'Choose a model.':modelId.length>128||!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(modelId)?'Enter a valid model ID (up to 128 characters).':row.requiresInstalledModel&&!row.availableModels.includes(modelId)?'Refresh and choose an installed local model.':duplicateModel&&selected.some(other=>other!==row&&other.provider===row.provider&&other.model.value.trim()===modelId)?'Choose different models for this provider.':'';
+    row.modelError.textContent=rowError;row.modelPicker.setAttribute('aria-invalid',String(!!rowError));row.model.setAttribute('aria-invalid',String(!!rowError));row.providerSelect.setAttribute('aria-invalid',String(!row.id));
     renderCloudSetup(row);
     for(const option of row.providerSelect.children)if(option.value)option.disabled=(targeted&&option.value==='grok')||!participantOptions.some(candidate=>candidate.provider===option.value&&!rows.some(other=>other!==row&&other.id===candidate.id));
   }
-  $('plannedCalls').textContent = targeted?3:chosen.providers.length * Number($('rounds').value);
+  $('plannedCalls').textContent = targeted?3:rows.length * Number($('rounds').value);
   if (!sessionId) $('maxCalls').textContent = $('plannedCalls').textContent;
+  renderWorkspace();
   return !error;
 }
 function append(title, body, who = '') {
@@ -309,6 +357,7 @@ function populateModelPicker(row) {
 function showModelChoices(provider,data) {
   modelLists.set(provider,data);
   for(const row of rows.filter(r=>r.provider===provider)){
+    row.modelStatus.className='model-status';
     row.availableModels=[...data.models];
     row.modelLabels=data.labels||{};
     populateModelPicker(row);
@@ -320,35 +369,35 @@ function configureParticipant(row,capability,modelValue) {
   row.providerSelect.value=row.provider;
   row.model.value=modelValue??'';row.customMode=false;
   row.model.placeholder='Enter an explicit model ID';
-  row.note.textContent=row.provider.startsWith('ollama-')?(row.requiresInstalledModel?'Local models must be installed on this machine.':'Cloud processing via signed-in Ollama.')+' Refresh lists registered models without inference. Uses model default effort.':'Load the provider catalog, then choose a model. Account access is not verified by the list.';
-  row.discovery.hidden=!row.modelDiscovery;
+  row.note.textContent=!row.id?'Choose a provider to view its model catalog.':row.provider==='ollama-local'?'Runs on this device. An installed model is required.':row.provider==='ollama-cloud'?'Runs in Ollama Cloud through your local daemon.':'Runs in the provider cloud using your account login.';
+  row.discovery.hidden=false;
   row.pickerLabel.textContent=row.provider==='ollama-cloud'?'Cloud models':row.provider==='ollama-local'?'Registered models':'Model';populateModelPicker(row);
   row.modelStatus.textContent='No model list requested.';
+  row.modelStatus.className='model-status';
   if(modelLists.has(row.provider))showModelChoices(row.provider,modelLists.get(row.provider));
 }
 function addParticipant(capability,modelValue) {
   if(rows.length>=3)return;
   const key=++nextRow,card=viewNode('div',undefined,'choice participant-choice');
-  const title=viewNode('h3'),providerLabel=viewNode('label','Provider'),providerSelect=viewNode('select');providerSelect.id='participant-provider-'+key;providerLabel.htmlFor=providerSelect.id;
+  const title=viewNode('h3'),role=viewNode('span','','participant-role'),providerLabel=viewNode('label','Provider'),providerSelect=viewNode('select');providerSelect.id='participant-provider-'+key;providerLabel.htmlFor=providerSelect.id;
   const placeholder=viewNode('option','Choose provider');placeholder.value='';providerSelect.append(placeholder);
   for(const provider of providerOptions){const option=viewNode('option',provider.label);option.value=provider.id;providerSelect.append(option);}
   const modelLabel=viewNode('label','Custom model ID'),model=viewNode('input');model.type='text';model.id='participant-model-'+key;modelLabel.htmlFor=model.id;model.maxLength=128;model.autocomplete='off';
-  const note=viewNode('small'),discovery=viewNode('div'),modelPicker=viewNode('select'),pickerLabel=viewNode('label','Registered models');modelPicker.id='participant-models-'+key;pickerLabel.htmlFor=modelPicker.id;
+  const note=viewNode('small'),discovery=viewNode('div',undefined,'model-discovery'),modelPicker=viewNode('select'),pickerLabel=viewNode('label','Registered models');modelPicker.id='participant-models-'+key;pickerLabel.htmlFor=modelPicker.id;
   const refreshModels=viewNode('button','Refresh models','secondary');refreshModels.type='button';
-  const modelStatus=viewNode('small','No model list requested.');modelStatus.setAttribute('role','status');
+  const modelStatus=viewNode('small','No model list requested.','model-status'),modelError=viewNode('small','','model-error');modelStatus.setAttribute('role','status');modelError.id='participant-error-'+key;modelStatus.id='participant-status-'+key;modelPicker.setAttribute('aria-describedby',modelStatus.id+' '+modelError.id);providerSelect.setAttribute('aria-describedby',modelError.id);
   discovery.append(pickerLabel,modelPicker,refreshModels,modelStatus);
-  const cloudHelp=viewNode('section',undefined,'ollama-cloud-help'),helpTitle=viewNode('h4','Find and register a cloud model');
+  const cloudHelp=viewNode('details',undefined,'ollama-cloud-help'),helpTitle=viewNode('summary','Find and register a cloud model');
   const cloudHint=viewNode('p'),commands=viewNode('pre',undefined,'ollama-setup-commands');
   const catalogLink=viewNode('a','Browse all cloud models');catalogLink.href=cloudSetup?.catalogUrl||'https://ollama.com/search?c=cloud';catalogLink.target='_blank';catalogLink.rel='noopener noreferrer';
   const docsLink=viewNode('a','Ollama setup guide');docsLink.href=cloudSetup?.docsUrl||'https://docs.ollama.com/cloud';docsLink.target='_blank';docsLink.rel='noopener noreferrer';
   const modelPageLink=viewNode('a','Selected model details');modelPageLink.target='_blank';modelPageLink.rel='noopener noreferrer';
   const links=viewNode('div',undefined,'ollama-setup-links');links.append(catalogLink,modelPageLink,docsLink);
   cloudHelp.append(helpTitle,cloudHint,commands,viewNode('small','Keep Ollama running. Commands target the same daemon as synqo. Cloud models run remotely; registration does not start a conversation.'),links);discovery.append(cloudHelp);
-  const remove=viewNode('button','Remove','secondary');remove.type='button';
   const customButton=viewNode('button','Enter a custom model ID','secondary');customButton.type='button';
-  const row={card,title,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,remove,cloudHelp,commands,cloudHint,modelPageLink,pickerLabel,customButton,modelLabel};rows.push(row);
+  const row={card,title,role,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,modelError,cloudHelp,commands,cloudHint,modelPageLink,pickerLabel,customButton,modelLabel};rows.push(row);
   customButton.onclick=()=>{if(!busy&&row.id){row.customMode=!row.customMode;refresh();}};
-  configureParticipant(row,capability,modelValue);card.append(title,providerLabel,providerSelect,modelLabel,model,note,discovery,remove,customButton);$('participantChoices').append(card);
+  configureParticipant(row,capability,modelValue);card.append(title,role,providerLabel,providerSelect,modelLabel,model,note,discovery,modelError,customButton);$('participantChoices').append(card);
   providerSelect.onchange=()=>{
     if(busy)return;
     const wasAuthor=$('author').value===row.id;
@@ -358,18 +407,17 @@ function addParticipant(capability,modelValue) {
   };
   model.oninput=()=>{populateModelPicker(row);refresh();};
   modelPicker.onchange=()=>{if(!busy){model.value=modelPicker.value;row.customMode=false;refresh();}};
-  remove.onclick=()=>{if(busy||rows.length<=2)return;rows.splice(rows.indexOf(row),1);$('participantChoices').replaceChildren(...rows.map(row=>row.card));refresh();};
   refreshModels.onclick=async()=>{
     const provider=row.provider;
     if(busy||!row.id||modelQueries.has(provider))return;
-    const query={};modelQueries.set(provider,query);refresh();modelStatus.textContent='Reading provider model metadata…';
+    const query={};modelQueries.set(provider,query);for(const other of rows.filter(r=>r.provider===provider))other.modelStatus.className='model-status';refresh();modelStatus.textContent='Reading provider model metadata…';
     try{
       const response=await fetch('/api/models?provider='+encodeURIComponent(provider)),data=await response.json();
       if(!response.ok)throw Error(data.error||'Model list unavailable.');
       if(modelQueries.get(provider)===query)showModelChoices(provider,data);
     }catch(error){
       modelLists.delete(provider);
-      for(const other of rows.filter(r=>r.provider===provider)){other.availableModels=[];populateModelPicker(other);other.modelStatus.textContent=error.message;}
+      for(const other of rows.filter(r=>r.provider===provider)){other.availableModels=[];populateModelPicker(other);other.modelStatus.textContent=error.message;other.modelStatus.className='model-status is-error';}
     }finally{if(modelQueries.get(provider)===query)modelQueries.delete(provider);refresh();}
   };
   return row;
@@ -412,7 +460,7 @@ $('participantCount').onchange=()=>{
   while(rows.length<count)addParticipant();
   rows.splice(count);$('participantChoices').replaceChildren(...rows.map(row=>row.card));refresh(author);
 };
-$('addParticipant').onclick=()=>{if(!busy&&ready&&$('workflowMode').value!=='targeted'){addParticipant();refresh();}};
+$('navNew').onclick=()=>navigateWorkspace('new');$('navSaved').onclick=()=>navigateWorkspace('saved');
 $('usePair').onclick=()=>{if(busy||$('usePair').disabled)return;setParticipants({providers:['codex','claude'],models:{codex:'gpt-6-astra',claude:'claude-sonnet-5-5'}});$('workflowMode').value='targeted';refresh('claude');};
 function finish(status) {
   if(workflowProgress){workflowProgress.status=status;workflowProgress.active=null;}
@@ -420,18 +468,19 @@ function finish(status) {
   if (events) events.close(); refresh();
 }
 $('run').onclick = async () => {
-  if (busy || historyLoading || !refresh() || !inferenceEnabled) return;
+  if (busy || historyLoading || reviewingSaved || workspaceView!=='new' || !refresh() || !inferenceEnabled) return;
   const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection(),workflowMode:$('workflowMode').value};
   if(request.workflowMode==='targeted'){request.maxRounds=3;request.author=$('author').value;request.checks=$('acceptanceChecks').value.split('\n').map(s=>s.trim()).filter(Boolean);}
   if(['wikipedia','web','both'].includes($('researchMode').value))request.research={mode:$('researchMode').value,query:$('researchQuery').value};
-  beginWorkflowProgress();sessionId = null; pendingSavedSession=null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; $('saveStatus').textContent = 'Saving discussion events as they arrive. The finished session will appear in Saved discussions.'; refresh();
+  beginWorkflowProgress();sessionId = null; sessionAttempted=true; pendingSavedSession=null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; $('saveStatus').textContent = 'Saving discussion events as they arrive. The finished session will appear in Saved discussions.'; refresh();
   if (events) events.close();
   $('outcome').textContent = 'Available after the discussion.'; $('evidence').textContent = 'Idea and optional context';
   $('feed').replaceChildren(); $('status').textContent = 'Creating'; $('calls').textContent = '0'; $('cost').textContent = 'Unknown'; $('report').style.display = 'none';$('jsonReport').style.display='none';$('tokenTotals').textContent='Awaiting token accounting';$('tokenDetails').replaceChildren();
+  $('sessionResults').focus?.({preventScroll:true});$('sessionResults').scrollIntoView?.({block:'start'});
   try {
     const response = await fetch('/api/sessions', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)});
     const data = await response.json(); if (!response.ok) throw Error(data.error);
-    sessionId = data.id; const startedSessionId=data.id; $('send').disabled = request.workflowMode==='targeted'; $('cancel').disabled = false;
+    sessionId = data.id; const startedSessionId=data.id; $('send').disabled = request.workflowMode==='targeted'; $('cancel').disabled = false;refresh();
     events = new EventSource('/api/sessions/' + sessionId + '/events');
     events.onmessage = event => {
       if(sessionId!==startedSessionId||!busy)return;
@@ -536,7 +585,8 @@ function showOutcome(o) {
 function syncSavedURL() {
   if (busy || typeof location === 'undefined' || typeof history === 'undefined') return;
   const params = new URLSearchParams(location.search);
-  for (const key of ['q','page','provider','model','from','to','session']) params.delete(key);
+  for (const key of ['q','page','provider','model','from','to','session','view']) params.delete(key);
+  params.set('view',workspaceView);
   if (historyQuery) params.set('q', historyQuery);
   params.set('page', String(historyPage));
   for (const [key,value] of Object.entries(historyFilters)) if (value) params.set(key,value);
@@ -593,6 +643,8 @@ async function openSaved(id) {
     const s = await response.json();
     if (!response.ok) throw Error(s.error || 'Saved discussion unavailable.');
     if (!s.readOnly) throw Error('This discussion is still active; wait until it finishes.');
+    if(!reviewingSaved)draftConfiguration=captureConfiguration();
+    reviewingSaved=true;workspaceView='saved';$('workspaceNotice').hidden=true;
     if (events) events.close();
     sessionId = s.id;
     $('feed').replaceChildren();
@@ -601,7 +653,7 @@ async function openSaved(id) {
     $('researchMode').value=s.research?.mode||(s.workflow?.research.status==='completed'?'wikipedia':'none');
     $('researchQuery').value=s.research?.query||s.workflow?.research.query||'';
     if (s.selection) setParticipants(s.selection);
-    refresh(s.targetedConfig?.author);beginWorkflowProgress(s);renderWorkflowFlow();
+    refresh(s.targetedConfig?.author);showSavedConfiguration(s);beginWorkflowProgress(s);renderWorkflowFlow();
     $('calls').textContent = s.calls; $('maxCalls').textContent = s.maxCalls ?? 'Unknown';
     $('cost').textContent = '$' + Number(s.spendKnownUSD).toFixed(4) + (s.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)');
     $('evidence').textContent = s.evidence ? s.evidence.id : 'Idea and optional context';
@@ -619,6 +671,7 @@ async function openSaved(id) {
     $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline';
     finish(s.status);
     syncSavedURL();
+    $('savedConfiguration').focus?.({preventScroll:true});$('savedConfiguration').scrollIntoView?.({block:'start'});
   } catch (error) { $('savedStatus').textContent = error.message; }
   finally { busy = false; refresh(); }
 }
@@ -632,6 +685,7 @@ $('previousSaved').onclick = () => historyPrevious ? loadSavedList(historyPage -
 $('nextSaved').onclick = () => historyNext ? loadSavedList(historyPage + 1) : Promise.resolve();
 async function restoreSavedView() {
   const params = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
+  workspaceView=params.has('session')||params.get('view')==='saved'||(!params.has('view')&&(['q','provider','model','from','to'].some(key=>params.has(key))||Number(params.get('page'))>1))?'saved':'new';
   const filters = Object.fromEntries(['provider','model','from','to'].map(key => [key,params.get(key)||'']));
   const query = params.get('q') || '';
   $('savedSearch').value = query;
@@ -641,6 +695,6 @@ async function restoreSavedView() {
   if (!loaded) return;
   const requested = params.get('session');
   if (requested) await openSaved(requested);
-  else syncSavedURL();
+  else {refresh();syncSavedURL();}
 }
 void restoreSavedView();

@@ -7,7 +7,7 @@ class Element {
   private controlValue='';
   get value(){return this.controlValue;}
   set value(value:string){this.controlValue=this.tagName==='select'&&!this.children.some(option=>option.value===value)?'':value;}
-  hidden=false;
+  hidden=false;open=false;
   style={display:''}; children: Element[]=[];
   private ownText='';
   get textContent():string{return this.children.length?this.ownText+this.children.map(c=>c.textContent).join(''):this.ownText;}
@@ -20,7 +20,7 @@ class Element {
   replaceChildren(...children:Element[]){this.children=[...children];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,fixtureChoices=true) {
-  const elements=Object.fromEntries(['participantCount','participantCountHint','saveStatus','workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  const elements=Object.fromEntries(['savedConfiguration','navNew','navSaved','newWorkspace','historyWorkspace','sessionResults','workspaceTitle','workspaceSubtitle','workspaceNotice','setupState','runConfigurationSummary','researchQueryField','researchError','ideaError','contextDetails','advancedSettings','participantCount','participantCountHint','saveStatus','workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.participantCount.tagName='select';for(const value of ['2','3'])elements.participantCount.append(Object.assign(new Element(),{value}));elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[],modelRequests:string[]=[];
   const streams:FakeEvents[]=[];
@@ -40,7 +40,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const urlGlobals=address?{location:address,history:{replaceState(_state:unknown,_title:string,path:string){address.href=new URL(path,address).href;urlWrites.push(address.href);}}}:{};
   runInNewContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),{document:{getElementById:(id:string)=>elements[id],createElement:(tag:string)=>Object.assign(new Element(),{tagName:tag}),createTextNode:(text:string)=>Object.assign(new Element(),{textContent:text})},fetch,EventSource:FakeEvents,URLSearchParams,...urlGlobals});
   await new Promise(resolve=>setImmediate(resolve));
-  const ui={elements,get rows(){return elements.participantChoices.children.map(card=>({card,title:card.children[0],provider:card.children[2],model:card.children[4],discovery:card.children[6],picker:card.children[6].children[1],refreshModels:card.children[6].children[2],modelStatus:card.children[6].children[3],cloudHelp:card.children[6].children[4],cloudHint:card.children[6].children[4].children[1],commands:card.children[6].children[4].children[2],remove:card.children[7],customButton:card.children[8]}));},requests,streams,historyRequests,modelRequests,address,urlWrites};
+  const ui={elements,get rows(){return elements.participantChoices.children.map(card=>{const discovery=card.children.find(c=>c.className==='model-discovery')!,cloudHelp=discovery.children.find(c=>c.tagName==='details')!;return {card,title:card.children.find(c=>c.tagName==='h3')!,role:card.children.find(c=>c.className==='participant-role')!,provider:card.children.find(c=>c.tagName==='select')!,model:card.children.find(c=>c.tagName==='input')!,discovery,picker:discovery.children.find(c=>c.tagName==='select')!,refreshModels:discovery.children.find(c=>c.tagName==='button')!,modelStatus:discovery.children.find(c=>c.tagName==='small')!,cloudHelp,cloudHint:cloudHelp.children[1],commands:cloudHelp.children[2],customButton:card.children.find(c=>c.tagName==='button')!};});},requests,streams,historyRequests,modelRequests,address,urlWrites};
   // Unrelated interaction tests explicitly enter synthetic user choices. Dedicated
   // picker tests disable this fixture action to inspect the real blank initial UI.
   if(fixtureChoices&&new Set(ui.rows.map(row=>row.provider.value)).size===ui.rows.length)for(const row of ui.rows)if(['codex','claude'].includes(row.provider.value)){await row.customButton.onclick!();row.model.value=row.provider.value==='codex'?'codex-default':'claude-fixture';row.model.oninput!();}
@@ -154,7 +154,7 @@ test('fresh full-discussion pages default to two participants even when three ar
 test('choosing three explicitly selects full discussion and requires configuring the extra row; count changes preserve choices',async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth),e=ui.elements;
  e.workflowMode.value='targeted';e.workflowMode.onchange!();const first=ui.rows.map(row=>({provider:row.provider.value,model:row.model.value})),author=e.author.value;
- e.participantCount.value='3';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.workflowMode.value,'discussion');assert.equal(e.participantCount.value,'3');assert.equal(e.author.value,author);assert.equal(ui.rows[2].provider.value,'');assert.equal(ui.rows[2].model.value,'');assert.equal(e.run.disabled,true);assert.equal(e.plannedCalls.textContent,6);
+ e.participantCount.value='3';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.workflowMode.value,'discussion');assert.equal(e.participantCount.value,'3');assert.equal(e.author.value,author);assert.equal(ui.rows[2].provider.value,'');assert.equal(ui.rows[2].model.value,'');assert.equal(e.run.disabled,true);assert.equal(e.plannedCalls.textContent,9);assert.match(e.runConfigurationSummary.textContent,/provider not chosen/);
  assert.deepEqual(ui.rows.slice(0,2).map(row=>({provider:row.provider.value,model:row.model.value})),first);assert.equal(ui.requests.length,0);assert.equal(ui.modelRequests.length,0);
  e.participantCount.value='2';e.participantCount.onchange!();assert.equal(ui.rows.length,2);assert.equal(e.workflowMode.value,'discussion');assert.equal(e.author.value,author);assert.deepEqual(ui.rows.map(row=>({provider:row.provider.value,model:row.model.value})),first);
  e.participantCount.value='3';e.participantCount.onchange!();const third=ui.rows[2];third.provider.value='claude';third.provider.onchange!();third.model.value='explicit-third';third.model.oninput!();assert.equal(e.plannedCalls.textContent,9);await e.run.onclick!();
@@ -181,17 +181,17 @@ test('one participant list numbers rows globally and offers Ollama in the same p
  assert.equal(ui.rows.length,2);assert.equal(ui.rows[1].discovery.hidden,false);
  await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['codex','ollama-cloud'],models:{codex:'astra','ollama-cloud':'cloud:model'}});
 });
-test('add/remove renumbers visible participants while retaining wire identities, models and draft author',async()=>{
+test('count changes preserve the first two identities, explicit models and draft author',async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth),e=ui.elements;
  ui.rows[0].model.value='model-a';ui.rows[1].provider.value='codex';ui.rows[1].provider.onchange!();ui.rows[1].model.value='model-b';ui.rows[1].model.oninput!();
  assert.equal(e.author.value,'codex-2');
- await e.addParticipant.onclick!();assert.equal(ui.rows.length,3);assert.equal(e.participantCount.value,'3');assert.equal(e.addParticipant.disabled,true);assert.equal(e.run.disabled,true);
+ e.participantCount.value='3';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.run.disabled,true);
  const third=ui.rows[2];assert.equal(third.provider.children.find(option=>option.value==='codex')!.disabled,true);
  third.provider.value='ollama-cloud';third.provider.onchange!();third.model.value='cloud:model';third.model.oninput!();assert.equal(e.plannedCalls.textContent,9);
- e.workflowMode.value='targeted';e.workflowMode.onchange!();assert.equal(e.addParticipant.hidden,true);assert.equal(e.run.disabled,true);assert.equal(ui.rows.length,3);
- await ui.rows[0].remove.onclick!();assert.equal(ui.rows.length,2);assert.equal(e.participantCount.value,'2');assert.equal(ui.rows[0].title.textContent,'Participant 1');assert.equal(ui.rows[1].title.textContent,'Participant 2');assert.equal(e.author.value,'codex-2');
- assert.equal(ui.rows[0].model.value,'model-b');assert.equal(ui.rows[1].model.value,'cloud:model');assert.match(e.author.children[0].textContent,/Participant 1 · OpenAI Codex · model-b/);
- await e.run.onclick!();assert.equal(ui.requests[0].author,'codex-2');assert.deepEqual(ui.requests[0].selection,{providers:['codex-2','ollama-cloud'],models:{'codex-2':'model-b','ollama-cloud':'cloud:model'}});
+ e.participantCount.value='2';e.participantCount.onchange!();e.workflowMode.value='targeted';e.workflowMode.onchange!();
+ assert.equal(ui.rows.length,2);assert.equal(ui.rows[0].title.textContent,'Participant 1');assert.equal(ui.rows[1].title.textContent,'Participant 2');assert.equal(e.author.value,'codex-2');
+ assert.equal(ui.rows[0].model.value,'model-a');assert.equal(ui.rows[1].model.value,'model-b');assert.match(e.author.children[1].textContent,/Participant 2 · OpenAI Codex · model-b/);
+ await e.run.onclick!();assert.equal(ui.requests[0].author,'codex-2');assert.deepEqual(ui.requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}});
 });
 test('disabled saved providers remain reviewable but cannot be dispatched or restored by the preset',async()=>{
  const saved={id:'saved-id',prompt:'Historical',maxRounds:3,status:'completed',readOnly:true,calls:2,spendKnownUSD:0,selection:{providers:['claude','claude-2'],models:{claude:'old-a','claude-2':'old-b'}},entries:[]};
@@ -245,7 +245,7 @@ for(const mode of ['wikipedia','web','both'])test(`research ${mode} is sent only
 test('research is absent by default; unconfigured web is refused and Wikipedia stays available',async()=>{
  const plain=await setup();await plain.elements.run.onclick!();assert.equal(Object.hasOwn(plain.requests[0],'research'),false);
  const ui=await setup();ui.elements.researchMode.value='both';ui.elements.researchMode.onchange!();assert.equal(ui.elements.run.disabled,true);assert.match(ui.elements.researchStatus.textContent,/not configured/);await ui.elements.run.onclick!();assert.equal(ui.requests.length,0);
- ui.elements.researchMode.value='wikipedia';ui.elements.researchMode.onchange!();ui.elements.researchQuery.value='public';assert.equal(ui.elements.run.disabled,false);
+ ui.elements.researchMode.value='wikipedia';ui.elements.researchMode.onchange!();ui.elements.researchQuery.value='public';ui.elements.researchQuery.oninput!();assert.equal(ui.elements.run.disabled,false);
 });
 test('research coverage labels mixed sources and personal/enterprise login without inferring workspace verification',async()=>{
  const real=await setup(false,false,undefined,true);assert.match(real.elements.providers.textContent,/personal or enterprise account login/);
@@ -296,17 +296,17 @@ test('UI hydrates only participating rows and requires a provider and valid mode
  rows[1].provider.value='';rows[1].provider.onchange!();assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/available provider/);
  await elements.run.onclick!();assert.equal(requests.length,0);
  rows[1].provider.value='grok';rows[1].provider.onchange!();rows[1].model.value='grok-4.7';rows[1].model.oninput!();assert.equal(elements.run.disabled,false);assert.equal(rows[1].model.disabled,false);
- rows[1].model.value='--bad';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);
+ rows[1].model.value='--bad';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);assert.equal(rows[1].model.attributes['aria-invalid'],'true');assert.match(rows[1].card.textContent,/Enter a valid model ID/);
 });
 test('UI sends only selected models, freezes running controls, handles completion and preserves user choices',async()=>{
  const ui=await setup();const {elements,rows,requests,streams}=ui;rows[0].model.value=' chosen-model ';
  await elements.run.onclick!();
  assert.deepEqual(requests[0].selection,{providers:['codex','claude'],models:{codex:'chosen-model',claude:'claude-fixture'}});
- assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.provider.disabled&&row.model.disabled));assert.equal(elements.addParticipant.disabled,true);
+ assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.provider.disabled&&row.model.disabled));assert.equal(elements.participantCount.disabled,true);assert.equal(elements.navSaved.disabled,true);
  await elements.run.onclick!();assert.equal(requests.length,1);
  streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',spendKnownUSD:0.01,spendIncomplete:true})});
  await new Promise(resolve=>setImmediate(resolve));assert.equal(elements.run.disabled,false);assert.match(elements.cost.textContent,/unknown costs/);assert.equal(streams[0].closed,true);
- await elements.addParticipant.onclick!();ui.rows[2].provider.value='grok';ui.rows[2].provider.onchange!();assert.equal(elements.plannedCalls.textContent,9);assert.equal(elements.maxCalls.textContent,6);
+ elements.participantCount.value='3';elements.participantCount.onchange!();ui.rows[2].provider.value='grok';ui.rows[2].provider.onchange!();assert.equal(elements.plannedCalls.textContent,9);assert.equal(elements.maxCalls.textContent,6);
  assert.equal(rows[0].model.value,' chosen-model ');assert.equal(elements.report.style.display,'inline');
 });
 test('completion automatically lists and selects the saved session and reopens its data without another run',async()=>{
@@ -320,7 +320,7 @@ test('completion automatically lists and selects the saved session and reopens i
  ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'failed'})});assert.equal(e.status.textContent,'completed');assert.match(e.saveStatus.textContent,/read-only/);assert.equal(ui.historyRequests.length,before+1);
 });
 test('completion preserves history filters/page and labels its extra option outside matching counts',async()=>{
- const ui=await setup(false,false,undefined,false,async url=>{const p=new URL(url,'http://local').searchParams;return {ok:true,json:async()=>({sessions:[],page:Number(p.get('page')),q:p.get('q'),filters:Object.fromEntries(['provider','model','from','to'].map(k=>[k,p.get(k)||''])),pageSize:50,total:60,discoveredTotal:60,totalPages:2,hasPrevious:true,hasNext:false,unavailable:0})};},'http://local/?page=2&q=older&provider=claude&model=old-model');
+ const ui=await setup(false,false,undefined,false,async url=>{const p=new URL(url,'http://local').searchParams;return {ok:true,json:async()=>({sessions:[],page:Number(p.get('page')),q:p.get('q'),filters:Object.fromEntries(['provider','model','from','to'].map(k=>[k,p.get(k)||''])),pageSize:50,total:60,discoveredTotal:60,totalPages:2,hasPrevious:true,hasNext:false,unavailable:0})};},'http://local/?view=new&page=2&q=older&provider=claude&model=old-model');
  await ui.elements.run.onclick!();ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed'})});await new Promise(resolve=>setImmediate(resolve));
  const p=new URL(ui.historyRequests.at(-1)!,'http://local').searchParams;assert.equal(p.get('page'),'2');assert.equal(p.get('q'),'older');assert.equal(p.get('model'),'old-model');assert.equal(ui.elements.savedModel.value,'old-model');assert.equal(ui.elements.savedSessions.value,'synthetic-session');assert.match(ui.elements.savedSessions.textContent,/Just finished.*completed/);assert.match(ui.elements.savedStatus.textContent,/of 60 matching.*outside these results.*not included/);assert.equal(ui.address!.searchParams.get('session'),'synthetic-session');
 });
@@ -342,7 +342,7 @@ test('pending history refresh blocks a new run and late events cannot overwrite 
 });
 test('UI fails closed on configuration failure and recovers controls after rejected request',async()=>{
  const failed=await setup(true);assert.equal(failed.elements.run.disabled,true);await failed.elements.run.onclick!();assert.equal(failed.requests.length,0);
- const rejected=await setup(false,true);await rejected.elements.run.onclick!();assert.equal(rejected.elements.run.disabled,false);assert.equal(rejected.streams.length,0);
+ const rejected=await setup(false,true);await rejected.elements.run.onclick!();assert.equal(rejected.elements.run.disabled,false);assert.equal(rejected.streams.length,0);assert.equal(rejected.elements.sessionResults.hidden,false);assert.match(rejected.elements.feed.textContent,/Invalid selection/);await rejected.elements.navNew.onclick!();assert.equal(rejected.elements.sessionResults.hidden,true);
 });
 
 test('UI shows runtime preparation and cleanup, retaining locked controls until finalization',async()=>{
@@ -598,4 +598,64 @@ test('decision brief legacy absence and malformed comparison stay explicit in th
  const raw=JSON.stringify({...legacy,comparison:{alternative:'x'}});
  ui.streams[0].onmessage!({data:JSON.stringify({type:'agent.completed',agent:'codex',round:3,text:raw,validation:{status:'invalid',issues:[]}})});
  assert.ok(ui.elements.feed.textContent.includes(raw));assert.doesNotMatch(ui.elements.feed.textContent,/Switch condition/);
+});
+
+test('workspace navigation separates setup/history without model discovery or starting a discussion',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,'http://local/',{},undefined,false),e=ui.elements;
+ assert.equal(e.newWorkspace.hidden,false);assert.equal(e.historyWorkspace.hidden,true);assert.equal(e.sessionResults.hidden,true);
+ await e.navSaved.onclick!();assert.equal(e.newWorkspace.hidden,true);assert.equal(e.historyWorkspace.hidden,false);assert.equal(e.navSaved.attributes['aria-pressed'],'true');assert.equal(e.setupState.textContent,'Saved history');
+ assert.equal(ui.address!.searchParams.get('view'),'saved');await e.run.onclick!();assert.equal(ui.requests.length,0);
+ await e.navNew.onclick!();assert.equal(e.newWorkspace.hidden,false);assert.equal(e.sessionResults.hidden,true);assert.equal(e.navNew.attributes['aria-pressed'],'true');
+ assert.equal(ui.modelRequests.length,0);assert.equal(ui.streams.length,0);assert.equal(ui.requests.length,0);assert.equal(ui.address!.searchParams.get('view'),'new');
+});
+
+test('opening multiple saved records preserves a complete unfinished three-row draft and clears old results on return',async()=>{
+ const saved={id:'saved-id',prompt:'Historical task <img src=x>',context:'Historical context',status:'completed',readOnly:true,maxRounds:1,calls:2,spendKnownUSD:0,selection:{providers:['codex','claude'],models:{codex:'historical-a',claude:'historical-b'}},entries:[{agent:'codex',round:1,text:'Historical answer'}],tokenAccounting:{knownTotalTokens:42,missingCalls:0,calls:[]}};
+ const ui=await setup(false,false,saved,false,undefined,'http://local/',{...mixedHealth,research:{web:true}}),e=ui.elements;
+ e.participantCount.value='3';e.participantCount.onchange!();
+ e.question.value='Private unfinished idea';e.context.value='Private constraints';e.acceptanceChecks.value='Stop condition\nRollback';e.researchMode.value='both';e.researchMode.onchange!();e.researchQuery.value='public keywords';e.researchQuery.oninput!();e.rounds.value='2';e.rounds.onchange!();e.author.value='codex';e.author.onchange!();e.contextDetails.open=true;e.advancedSettings.open=true;
+ const firstModel=ui.rows[0].model.value;
+ await e.navSaved.onclick!();assert.equal(e.question.value,'Private unfinished idea');
+ e.savedSessions.value='saved-id';await e.openSaved.onclick!();
+ assert.equal(e.sessionResults.hidden,false);assert.equal(e.newWorkspace.hidden,true);assert.equal(e.run.disabled,true);assert.match(e.savedConfiguration.textContent,/Historical task <img src=x>.*Historical context/s);assert.match(e.tokenTotals.textContent,/42/);
+ assert.equal(ui.requests.length,0);await e.run.onclick!();assert.equal(ui.requests.length,0);
+ saved.id='second-id';saved.prompt='A second saved task';e.savedSessions.value='second-id';await e.openSaved.onclick!();assert.match(e.savedConfiguration.textContent,/A second saved task/);
+ await e.navNew.onclick!();
+ assert.equal(e.question.value,'Private unfinished idea');assert.equal(e.context.value,'Private constraints');assert.equal(e.acceptanceChecks.value,'Stop condition\nRollback');assert.equal(e.researchMode.value,'both');assert.equal(e.researchQuery.value,'public keywords');assert.equal(e.rounds.value,'2');assert.equal(e.author.value,'codex');assert.equal(e.contextDetails.open,true);assert.equal(e.advancedSettings.open,true);
+ assert.equal(ui.rows.length,3);assert.equal(ui.rows[0].model.value,firstModel);assert.equal(ui.rows[0].model.hidden,false);assert.equal(ui.rows[2].provider.value,'');assert.equal(ui.rows[2].model.value,'');assert.equal(e.run.disabled,true);
+ assert.equal(e.sessionResults.hidden,true);assert.equal(e.feed.textContent,'');assert.equal(e.savedConfiguration.textContent,'');assert.equal(e.tokenDetails.textContent,'');assert.equal(e.cost.textContent,'Unknown');assert.equal(e.calls.textContent,'0');assert.equal(e.report.style.display,'none');assert.equal(e.report.href,'#');assert.equal(ui.address!.searchParams.has('session'),false);assert.doesNotMatch(ui.address!.href,/Private|constraints|keywords/);
+ assert.equal(ui.modelRequests.length,0);assert.equal(ui.requests.length,0);assert.equal(ui.streams.length,0);
+});
+
+test('restored targeted draft starts with its own roles, criteria and public query rather than the saved configuration',async()=>{
+ const saved={id:'saved-id',prompt:'Historical',status:'completed',readOnly:true,maxRounds:1,calls:1,spendKnownUSD:0,selection:{providers:['codex','claude'],models:{codex:'old-a',claude:'old-b'}},entries:[]};
+ const ui=await setup(false,false,saved,false,undefined,undefined,{research:{web:true}}),e=ui.elements;
+ e.workflowMode.value='targeted';e.workflowMode.onchange!();e.author.value='codex';e.author.onchange!();e.acceptanceChecks.value='A measurable outcome';e.question.value='Current task';e.context.value='Current context';e.researchMode.value='wikipedia';e.researchMode.onchange!();e.researchQuery.value='Public topic';e.researchQuery.oninput!();
+ await e.navSaved.onclick!();e.savedSessions.value='saved-id';await e.openSaved.onclick!();await e.navNew.onclick!();
+ assert.equal(ui.rows[0].role.textContent,'Draft author');assert.equal(ui.rows[1].role.textContent,'Reviewer');assert.equal(e.run.disabled,false);
+ await e.run.onclick!();assert.equal(e.sessionResults.hidden,false);assert.equal(e.navNew.disabled,true);assert.equal(e.navSaved.disabled,true);await e.navSaved.onclick!();assert.equal(e.historyWorkspace.hidden,true);
+ assert.deepEqual(ui.requests[0],{url:'/api/sessions',prompt:'Current task',context:'Current context',grounding:'none',maxRounds:3,selection:{providers:['codex','claude'],models:{codex:'codex-default',claude:'claude-fixture'}},workflowMode:'targeted',author:'codex',checks:['A measurable outcome'],research:{mode:'wikipedia',query:'Public topic'}});
+});
+
+test('research query is revealed only when opted in, validated before Start and retained while off',async()=>{
+ const ui=await setup(),e=ui.elements;assert.equal(e.researchQueryField.hidden,true);assert.equal(e.researchError.textContent,'');
+ e.researchMode.value='wikipedia';e.researchMode.onchange!();assert.equal(e.researchQueryField.hidden,false);assert.equal(e.run.disabled,true);assert.equal(e.researchQuery.attributes['aria-invalid'],'true');await e.run.onclick!();assert.equal(ui.requests.length,0);
+ for(const query of ['   ','a'.repeat(301)]){e.researchQuery.value=query;e.researchQuery.oninput!();assert.equal(e.run.disabled,true);}
+ e.researchQuery.value='Public topic';e.researchQuery.oninput!();assert.equal(e.run.disabled,false);e.researchMode.value='none';e.researchMode.onchange!();assert.equal(e.researchQueryField.hidden,true);assert.equal(e.researchQuery.value,'Public topic');assert.equal(e.researchError.textContent,'');
+ e.question.value='  ';e.question.oninput!();assert.equal(e.run.disabled,true);assert.equal(e.question.attributes['aria-invalid'],'true');
+ e.question.value='A decision';e.question.oninput!();await e.run.onclick!();assert.equal(Object.hasOwn(ui.requests[0],'research'),false);
+});
+
+for(const bookmark of ['?view=saved','?q=older&page=2','?session=saved-id'])test(`saved workspace bookmark ${bookmark} opens history and reports restoration failures visibly`,async()=>{
+ const ui=await setup(false,false,undefined,false,async()=>({ok:false,json:async()=>({error:'History temporarily unavailable'})}),'http://local/'+bookmark);
+ assert.equal(ui.elements.historyWorkspace.hidden,false);assert.equal(ui.elements.newWorkspace.hidden,true);assert.match(ui.elements.savedStatus.textContent,/temporarily unavailable/);assert.equal(ui.urlWrites.length,0);assert.equal(ui.requests.length,0);assert.equal(ui.streams.length,0);
+});
+
+test('history in flight locks navigation and finished-session New clears results without discarding the editable setup',async()=>{
+ let hold=false,release!:()=>void;
+ const ui=await setup(false,false,undefined,false,async()=>{if(hold)await new Promise<void>(resolve=>{release=resolve;});return {ok:true,json:async()=>({sessions:[],q:'',page:1,total:0,discoveredTotal:0,totalPages:1,unavailable:0})};}),e=ui.elements;
+ e.context.value='Keep this context';await e.run.onclick!();hold=true;ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed'})});
+ assert.equal(e.navSaved.disabled,true);assert.equal(e.navNew.disabled,true);await e.navSaved.onclick!();assert.equal(e.historyWorkspace.hidden,true);
+ release();await new Promise(resolve=>setImmediate(resolve));await e.navNew.onclick!();
+ assert.equal(e.context.value,'Keep this context');assert.equal(e.question.value,'Synthetic question');assert.equal(e.sessionResults.hidden,true);assert.equal(e.calls.textContent,'0');assert.equal(ui.requests.length,1);assert.equal(ui.streams[0].closed,true);
 });

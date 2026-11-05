@@ -50,7 +50,9 @@ test('UI serves current synqo branding and prevents stale HTML and script cachin
  const {request,app,invocations}=setup(t);
  const page=await request('/');assert.equal(page.status,200);assert.equal(page.headers['Cache-Control'],'no-store');
  assert.match(page.text,/<title>synqo · Collaborative research<\/title>/);
- assert.match(page.text,/<h1>synqo · Collaborative research<\/h1>/);
+ assert.match(page.text,/<h1>synqo<\/h1>/);assert.match(page.text,/>Collaborative research<\/span>/);
+ assert.match(page.text,/<nav[^>]+aria-label="Workspace"/);assert.match(page.text,/id="navNew"/);assert.match(page.text,/id="navSaved"/);
+ const ids=[...page.text.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);assert.equal(new Set(ids).size,ids.length,'Control IDs must stay unique');
  assert.doesNotMatch(page.text,/Shared inquiry|Better ideas together/i);
  const script=await request('/app.js');assert.equal(script.status,200);assert.equal(script.headers['Cache-Control'],'no-store');
  assert.equal(app.engine.sessions.size,0);assert.equal(invocations.length,0);

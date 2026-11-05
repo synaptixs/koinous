@@ -95,12 +95,12 @@ discussions cannot start until installed models are found; only listed local mod
 If none are installed or Ollama is unavailable, choose Cloud or another provider.
 The picker shows two rows, numbered once across all providers. Each row selects
 one provider and model. Both rows may use the same provider with different explicit
-model IDs. **Number of participants** defaults to **2**; choose
+model IDs. **Participants** defaults to **2**; choose
 **3 — Full discussion** to add an empty third row and use that compatible workflow.
 Choose its provider and model yourself. Choosing **2** removes the last row without
 changing the first two choices; targeted review then becomes available again.
-The **Add participant** and **Remove** shortcuts keep the count in sync. Saved
-three-participant discussions reopen with their original count and models.
+Use this count selector to add or remove the last row. Saved three-participant
+discussions retain their original count and models in read-only review.
 The ordinary Codex + Claude launcher also exposes Ollama
 for mixed selections; `--openai-only` disables it.
 
@@ -160,7 +160,7 @@ unverified. No new inference run is authorized by this documentation.
 
 ## Optional research
 
-The Research selector defaults to **None — use idea and supplied context**.
+The Research selector defaults to **Off — idea and context only**.
 Select Wikipedia, Web search, or both only when you want external research. Both
 services receive the same explicit public query. The idea/context are not used as
 implicit search queries. Avoid entering private information in the query field.
@@ -218,7 +218,7 @@ The launcher does not load `.env` and overrides inherited provider/mode/inferenc
 settings: mock Codex and Claude initially selected, mock Ollama choices available,
 Grok off, both live-inference switches disabled.
 No login, API key, VM, dependency installation or model call is needed. New discussions
-are also mock-only. Keep research set to “None — use idea and supplied context” for an offline demo.
+are also mock-only. Keep research set to “Off — idea and context only” for an offline demo.
 
 If port 3030 is occupied, use `PORT=3031 npm run demo` on macOS/Linux, or set
 `$env:PORT='3031'` before `npm run demo` in PowerShell. Stop with Ctrl+C.
@@ -244,13 +244,13 @@ reliability for every idea. The mock walkthrough remains available.
 ## Five-minute walkthrough
 
 1. Explain: “One draft → focused defect review → revision only for material findings, with unresolved issues preserved.”
-2. Enter: “How should developers search source code and documentation: lexical, semantic, or hybrid retrieval?”
-3. Keep Codex and Claude selected, Draft + targeted review, Claude as author, and “None — use idea and supplied context”.
+2. Choose **New discussion**. Click **Load models** in both cards, then choose a mock model from each list. Enter: “How should developers search source code and documentation: lexical, semantic, or hybrid retrieval?”
+3. Keep Codex and Claude selected, Draft + targeted review, Claude as author, and “Off — idea and context only”.
 4. Start discussion. These are deterministic mock stand-ins, not actual model opinions;
    model IDs do not select real models in mock mode. No external research is requested.
 5. Show the two mock replies, skipped revision, retained draft and per-call token accounting. Mock findings and zero tokens illustrate plumbing only. Offline tests exercise the material-finding/third-call branch.
 6. Download Markdown and JSON. Show findings, changes, original responses and identical token accounting.
-7. Reload and reopen the saved discussion to demonstrate persistence without inference.
+7. Choose **Saved discussions** and open the automatically selected finished record. Its setup and results are read-only. Return to **New discussion** to restore the prior configuration and clear the old results. Reload and reopen history to demonstrate finished-session persistence; unfinished setup edits are held only in the open page.
 
 ## Presenting the existing real PKG-search discussion
 
