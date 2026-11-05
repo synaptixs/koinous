@@ -29,6 +29,53 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Unified participant picker — 2026-11-05 (offline)
+
+The user identified misleading per-provider Participant 1/2 labels and a separate
+Ollama group. The picker now renders only the participating rows, numbered once
+across the discussion. Each row has Provider and Model ID controls; Ollama Local
+and Cloud are choices in the same provider selector as OpenAI and Claude. Their
+registry controls appear inside that row only when selected. Targeted review uses
+two rows; full discussion can explicitly add a third and remove a row. Adding an
+unconfigured row blocks dispatch until its provider is chosen. Draft-author and
+role labels identify the visible participant, provider and model.
+
+The browser maps choices to the server's available participant identities and
+provider ownership metadata. Existing API IDs, model keys and saved-session
+contracts are unchanged. Same-provider choices allocate distinct available slots
+and require different model IDs; unsupported extra slots are disabled. Server
+provider disabling remains authoritative. Saved selections retain their exact IDs
+and models; unavailable historical providers remain readable but block a new run.
+Local models require a verified installed choice before dispatch. Empty/failed
+metadata refresh preserves the user's model input and blocks dispatch. Explicit
+refresh updates matching rows only; a late response cannot overwrite a participant
+that switched provider. No implicit model discovery, installation or authentication.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Current contracts, PKG impact and existing UI/saved tests | Passed |
+| Implement | 25% | Unified participant rows, roles, registry controls and compatibility | Passed |
+| Verify | 25% | TypeScript, 617 Node + 33 Python tests; mock browser desktop/mobile | Passed |
+| Document | 25% | Current setup guides, design record and reviewable delivery | Passed |
+
+Measured before editing clean 77ebb25 (callers/docs): UI selection2/1, refresh13/1,
+showModelChoices1/1, openSaved2/1. No truncation; JS untraced calls are not tracked,
+so caller counts are floors. Full-ID regression-gap queries did not resolve;
+short-name queries resolved and flag refresh, finish, loadSavedList, openSaved,
+restoreSavedView and module callbacks. Existing VM-loaded UI tests are not linked
+by the graph. Interaction regressions now exercise unified/mixed/same-provider
+selection, exact wire identities, add/remove and role preservation, unavailable
+historical providers, local registry checks and late metadata. Browser testing
+caught native select behavior losing the selected author when provider options
+changed; the fix rebuilds options before selecting the author, including reopening
+saved sessions. The DOM fake now models assignment to missing select options.
+
+The full offline gate passes. Browser checks cover mixed OpenAI/Ollama selection,
+same-provider models, third participant add/remove, role renumbering and a 390px
+layout without page-width overflow. No model, login or live research calls were
+made; Ollama metadata checks in the browser used deterministic mock responses.
+The user's running server was untouched. Overall 48.33% and P6 80% unchanged.
+
 ### Light translucent theme — 2026-11-05 (offline)
 
 The user requested a lighter, possibly translucent UI. The page now uses a pale

@@ -97,8 +97,9 @@ for account setup and manual controls. Advanced Grok runtime instructions are in
 
 ### Ollama Cloud + Local
 
-**Ollama Cloud + Local** is one section in the model picker, with separate
-cloud and local participant slots. Both use
+Each participant has one row with a **Provider** and **Model ID**. Choose
+**Ollama Cloud** or **Ollama Local** in the same provider selector as OpenAI and Claude.
+Both Ollama locations use
 your local Ollama app/API. Local models run on your machine; Cloud sends prompts to
 Ollama Cloud using `ollama signin`, with no API key stored in synqo.
 See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
@@ -113,11 +114,11 @@ See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
    npm run start:real -- --enable-inference --ollama-only
    ```
 
-4. Open **http://127.0.0.1:3030**. Select two participants, click **Refresh models**
-   under Local or Cloud, then choose a registered model. Local selection unlocks
-   only after an installed model is found; entering an unlisted local ID cannot
+4. Open **http://127.0.0.1:3030**. Choose Local or Cloud as the provider in each
+   participating row, click **Refresh models**, then choose a registered model.
+   Local discussions can start only after an installed model is found; an unlisted local ID cannot
    start a discussion.
-   Two local models or two cloud models can use the second participant slot.
+   Both rows can use Local or both can use Cloud, with different model IDs.
 5. Choose the author and start the discussion when ready to use model resources.
    The normal Codex + Claude live launcher also exposes Ollama for mixed pairings.
    OpenAI-only mode keeps other providers disabled.

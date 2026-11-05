@@ -3,21 +3,25 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 class Element {
-  tagName=''; id=''; type=''; value=''; checked=false; disabled=false; className=''; htmlFor=''; maxLength=0; placeholder=''; autocomplete=''; href='';
+  tagName=''; id=''; type=''; checked=false; disabled=false; className=''; htmlFor=''; maxLength=0; placeholder=''; autocomplete=''; href='';
+  private controlValue='';
+  get value(){return this.controlValue;}
+  set value(value:string){this.controlValue=this.tagName==='select'&&!this.children.some(option=>option.value===value)?'':value;}
   hidden=false;
   style={display:''}; children: Element[]=[];
   private ownText='';
   get textContent():string{return this.children.length?this.ownText+this.children.map(c=>c.textContent).join(''):this.ownText;}
   set textContent(value:string){this.ownText=value;this.children=[];}
-  setAttribute(_name:string,_value:string){}
+  attributes:Record<string,string>={};
+  setAttribute(name:string,value:string){this.attributes[name]=value;}
   start=1;
   onclick?:()=>Promise<void>; onchange?:()=>void; oninput?:()=>void;
   append(...children:Element[]){this.children.push(...children);}
-  replaceChildren(){this.children=[];this.ownText='';}
+  replaceChildren(...children:Element[]){this.children=[...children];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>) {
-  const elements=Object.fromEntries(['researchStatus','ollamaGroup','ollamaChoices','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
-  elements.ollamaGroup.hidden=true;elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
+  const elements=Object.fromEntries(['researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
   const streams:FakeEvents[]=[];
   class FakeEvents {
@@ -36,24 +40,77 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const urlGlobals=address?{location:address,history:{replaceState(_state:unknown,_title:string,path:string){address.href=new URL(path,address).href;urlWrites.push(address.href);}}}:{};
   runInNewContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),{document:{getElementById:(id:string)=>elements[id],createElement:(tag:string)=>Object.assign(new Element(),{tagName:tag}),createTextNode:(text:string)=>Object.assign(new Element(),{textContent:text})},fetch,EventSource:FakeEvents,URLSearchParams,...urlGlobals});
   await new Promise(resolve=>setImmediate(resolve));
-  const rows=[...elements.providerChoices.children,...elements.ollamaChoices.children].map(card=>({toggle:card.children[0].children[0],model:card.children[2]}));
-  return {elements,rows,requests,streams,historyRequests,address,urlWrites};
+  return {elements,get rows(){return elements.participantChoices.children.map(card=>({card,title:card.children[0],provider:card.children[2],model:card.children[4],discovery:card.children[6],picker:card.children[6].children[1],refreshModels:card.children[6].children[2],modelStatus:card.children[6].children[3],remove:card.children[7]}));},requests,streams,historyRequests,address,urlWrites};
 }
 const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',group:'ollama',requiresInstalledModel:true,defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',group:'ollama',requiresInstalledModel:false,defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
+const mixedHealth={agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:''},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'ollama-local',label:'Ollama Local',defaultModel:''},{id:'ollama-cloud',label:'Ollama Cloud',defaultModel:''}],availableParticipants:[{id:'codex',provider:'codex',label:'OpenAI · Participant 1',defaultModel:''},{id:'codex-2',provider:'codex',label:'OpenAI · Participant 2',defaultModel:''},{id:'claude',provider:'claude',label:'Claude · Participant 1',defaultModel:''},{id:'claude-2',provider:'claude',label:'Claude · Participant 2',defaultModel:''},...ollamaHealth.availableParticipants,{...ollamaHealth.availableParticipants[0],id:'ollama-local-2'},{...ollamaHealth.availableParticipants[1],id:'ollama-cloud-2'}]};
+test('one participant list numbers rows globally and offers Ollama in the same provider selector',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth);
+ assert.equal(ui.rows.length,2);
+ for(const [index,row] of ui.rows.entries()){
+  assert.equal(row.title.textContent,'Participant '+(index+1));assert.equal(row.provider.attributes['aria-label'],'Participant '+(index+1)+' provider');
+  assert.deepEqual(row.provider.children.map(option=>option.textContent),['Choose provider','OpenAI Codex','Anthropic Claude','Ollama Local','Ollama Cloud']);
+  assert.equal(row.discovery.hidden,true);
+ }
+ ui.rows[1].provider.value='ollama-cloud';ui.rows[1].provider.onchange!();ui.rows[1].model.value='cloud:model';ui.rows[0].model.value='astra';ui.rows[0].model.oninput!();
+ assert.equal(ui.rows.length,2);assert.equal(ui.rows[1].discovery.hidden,false);
+ await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['codex','ollama-cloud'],models:{codex:'astra','ollama-cloud':'cloud:model'}});
+});
+test('add/remove renumbers visible participants while retaining wire identities, models and draft author',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth),e=ui.elements;
+ ui.rows[0].model.value='model-a';ui.rows[1].provider.value='codex';ui.rows[1].provider.onchange!();ui.rows[1].model.value='model-b';ui.rows[1].model.oninput!();
+ assert.equal(e.author.value,'codex-2');
+ await e.addParticipant.onclick!();assert.equal(ui.rows.length,3);assert.equal(e.addParticipant.disabled,true);assert.equal(e.run.disabled,true);
+ const third=ui.rows[2];assert.equal(third.provider.children.find(option=>option.value==='codex')!.disabled,true);
+ third.provider.value='ollama-cloud';third.provider.onchange!();third.model.value='cloud:model';third.model.oninput!();assert.equal(e.plannedCalls.textContent,9);
+ e.workflowMode.value='targeted';e.workflowMode.onchange!();assert.equal(e.addParticipant.hidden,true);assert.equal(e.run.disabled,true);assert.equal(ui.rows.length,3);
+ await ui.rows[0].remove.onclick!();assert.equal(ui.rows.length,2);assert.equal(ui.rows[0].title.textContent,'Participant 1');assert.equal(ui.rows[1].title.textContent,'Participant 2');assert.equal(e.author.value,'codex-2');
+ assert.equal(ui.rows[0].model.value,'model-b');assert.equal(ui.rows[1].model.value,'cloud:model');assert.match(e.author.children[0].textContent,/Participant 1 · OpenAI Codex · model-b/);
+ await e.run.onclick!();assert.equal(ui.requests[0].author,'codex-2');assert.deepEqual(ui.requests[0].selection,{providers:['codex-2','ollama-cloud'],models:{'codex-2':'model-b','ollama-cloud':'cloud:model'}});
+});
+test('disabled saved providers remain reviewable but cannot be dispatched or restored by the preset',async()=>{
+ const saved={id:'saved-id',prompt:'Historical',maxRounds:3,status:'completed',readOnly:true,calls:2,spendKnownUSD:0,selection:{providers:['claude','claude-2'],models:{claude:'old-a','claude-2':'old-b'}},entries:[]};
+ const health={agents:['codex','codex-2'],availableProviders:[mixedHealth.availableProviders[0]],availableParticipants:mixedHealth.availableParticipants.slice(0,2)};
+ const ui=await setup(false,false,saved,false,undefined,undefined,health);ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();
+ assert.equal(ui.rows[0].model.value,'old-a');assert.match(ui.rows[0].provider.textContent,/Unavailable on this server: claude/);
+ assert.equal(ui.elements.run.disabled,true);assert.equal(ui.elements.usePair.disabled,true);await ui.elements.usePair.onclick!();await ui.elements.run.onclick!();assert.equal(ui.requests.length,0);
+ assert.ok(ui.rows.every(row=>!row.provider.children.some(option=>option.value==='claude')));
+});
+test('late Ollama metadata cannot overwrite a participant switched to another provider',async()=>{
+ let complete!:(value:{ok:boolean;json:()=>Promise<any>})=>void;
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth,async()=>new Promise(resolve=>{complete=resolve;}));
+ const row=ui.rows[0];row.provider.value='ollama-local';row.provider.onchange!();const pending=row.refreshModels.onclick!();
+ row.provider.value='codex';row.provider.onchange!();row.model.value='kept-model';row.model.oninput!();
+ complete({ok:true,json:async()=>({models:['local:model'],total:1,source:'local-ollama-registry'})});await pending;
+ assert.equal(row.provider.value,'codex');assert.equal(row.model.value,'kept-model');assert.equal(row.discovery.hidden,true);assert.equal(row.modelStatus.textContent,'No model list requested.');assert.equal(ui.requests.length,0);
+});
+test('saved author is selected after its new participant options exist in the DOM',async()=>{
+ const saved={id:'saved-id',prompt:'Saved author',maxRounds:3,status:'completed',readOnly:true,calls:2,spendKnownUSD:0,workflowMode:'targeted',targetedConfig:{author:'codex-2',checks:[]},selection:{providers:['codex-2','claude'],models:{'codex-2':'saved-author',claude:'saved-reviewer'}},entries:[]};
+ const ui=await setup(false,false,saved,false,undefined,undefined,mixedHealth);assert.equal(ui.elements.author.value,'claude');
+ ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();
+ assert.equal(ui.elements.author.value,'codex-2');assert.match(ui.elements.author.children[0].textContent,/Participant 1 · OpenAI Codex · saved-author/);assert.equal(ui.requests.length,0);
+});
+test('one local refresh validates both same-provider rows and rejects an unlisted model',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth,async()=>({ok:true,json:async()=>({models:['local:a','local:b'],total:2,source:'local-ollama-registry'})}));
+ for(const row of ui.rows){row.provider.value='ollama-local';row.provider.onchange!();}
+ await ui.rows[0].refreshModels.onclick!();
+ for(const [i,row] of ui.rows.entries()){assert.match(row.modelStatus.textContent,/2 of 2 registered/);row.model.value=i?'local:b':'local:a';row.model.oninput!();}
+ assert.equal(ui.elements.run.disabled,false);ui.rows[1].model.value='unlisted';ui.rows[1].model.oninput!();assert.equal(ui.elements.run.disabled,true);
+ ui.rows[1].model.value='local:b';ui.rows[1].model.oninput!();await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection.providers,['ollama-local','ollama-local-2']);
+});
 test('Ollama UI explicitly refreshes metadata, selects models and records default effort',async()=>{
  const metadataRequests:string[]=[];
  const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async url=>{metadataRequests.push(url);return {ok:true,json:async()=>({models:['registered-model'],total:1,source:'mock',truncated:false,unsupported:0})};});
  assert.equal(metadataRequests.length,0);assert.equal(f.elements.run.disabled,true);
- for(const card of f.elements.ollamaChoices.children){const picker=card.children[4],button=card.children[5];await button.onclick!();picker.value='registered-model';picker.onchange!();assert.match(card.children[6].textContent,/1 of 1 registered models/);}
- f.rows[0].toggle.checked=true;f.rows[0].toggle.onchange!();
+ for(const row of f.rows){await row.refreshModels.onclick!();row.picker.value='registered-model';row.picker.onchange!();assert.match(row.modelStatus.textContent,/1 of 1 registered models/);}
  assert.deepEqual(metadataRequests,['/api/models?provider=ollama-local','/api/models?provider=ollama-cloud']);
  f.elements.workflowMode.value='targeted';f.elements.workflowMode.onchange!();assert.match(f.elements.roleNote.textContent,/model default effort/);assert.doesNotMatch(f.elements.roleNote.textContent,/low effort|medium effort/);assert.equal(f.elements.run.disabled,false);
  await f.elements.run.onclick!();assert.equal(f.requests.length,1);assert.deepEqual(f.requests[0].selection,{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'registered-model','ollama-cloud':'registered-model'}});
- assert.ok(f.elements.ollamaChoices.children.every(card=>card.children[4].disabled&&card.children[5].disabled));
+ assert.ok(f.rows.every(row=>row.picker.disabled&&row.refreshModels.disabled&&row.provider.disabled));
 });
 test('Ollama UI reports metadata errors while inference stays disabled',async()=>{
  const f=await setup(false,false,undefined,true,undefined,undefined,ollamaHealth,async()=>({ok:false,json:async()=>({error:'Start Ollama and refresh.'})}));
- const card=f.elements.ollamaChoices.children[0];await card.children[5].onclick!();assert.equal(card.children[6].textContent,'Start Ollama and refresh.');assert.equal(f.elements.run.disabled,true);assert.equal(f.requests.length,0);
+ await f.rows[0].refreshModels.onclick!();assert.equal(f.rows[0].modelStatus.textContent,'Start Ollama and refresh.');assert.equal(f.elements.run.disabled,true);assert.equal(f.requests.length,0);
 });
 for(const mode of ['wikipedia','web','both'])test(`research ${mode} is sent only after explicit selection with its public query`,async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,{research:{web:true}});
@@ -75,30 +132,30 @@ test('saved both-source research selection reopens without research or model req
  const saved={id:'saved-id',prompt:'Saved task',status:'completed',readOnly:true,maxRounds:1,calls:2,spendKnownUSD:0,spendIncomplete:true,research:{mode:'both',query:'saved public query'},selection:{providers:['codex','claude'],models:{}},entries:[]};
  const ui=await setup(false,false,saved,true);ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();assert.equal(ui.elements.researchMode.value,'both');assert.equal(ui.elements.researchQuery.value,'saved public query');assert.equal(ui.requests.length,0);assert.equal(ui.elements.run.disabled,true);
 });
-test('Ollama Cloud + Local offers local selection only after installed models are found',async()=>{
+test('Ollama uses the same participant rows and blocks dispatch until installed models are found',async()=>{
  let calls=0;
  const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async()=>{calls++;return {ok:true,json:async()=>({models:[],total:0,source:'local-ollama-registry',truncated:false,unsupported:0})};});
- assert.equal(f.elements.ollamaGroup.hidden,false);assert.equal(f.elements.providerChoices.children.length,0);assert.equal(f.elements.ollamaChoices.children.length,2);
- assert.equal(f.rows[0].toggle.checked,false);assert.equal(f.rows[0].toggle.disabled,true);assert.equal(f.rows[1].toggle.disabled,false);assert.equal(calls,0);
- const card=f.elements.ollamaChoices.children[0];await card.children[5].onclick!();
- assert.equal(calls,1);assert.equal(f.rows[0].toggle.disabled,true);assert.match(card.children[6].textContent,/No local models installed/);assert.equal(f.requests.length,0);
+ assert.equal(f.rows.length,2);assert.equal(f.rows[0].title.textContent,'Participant 1');assert.equal(f.rows[1].title.textContent,'Participant 2');
+ assert.equal(f.rows[0].provider.value,'ollama-local');assert.equal(f.rows[1].provider.value,'ollama-cloud');assert.equal(calls,0);
+ await f.rows[0].refreshModels.onclick!();
+ assert.equal(calls,1);assert.equal(f.elements.run.disabled,true);assert.match(f.rows[0].modelStatus.textContent,/No local models installed/);assert.equal(f.requests.length,0);
 });
 test('installed-model refresh unlocks both local slots and refuses invented local IDs',async()=>{
  const health={...ollamaHealth,availableParticipants:[...ollamaHealth.availableParticipants,{...ollamaHealth.availableParticipants[0],id:'ollama-local-2',label:'Ollama Local 2'}]};
  const f=await setup(false,false,undefined,false,undefined,undefined,health,async()=>({ok:true,json:async()=>({models:['installed:small'],total:1,source:'local-ollama-registry',truncated:false,unsupported:0})}));
- await f.elements.ollamaChoices.children[0].children[5].onclick!();assert.equal(f.rows[0].toggle.disabled,false);assert.equal(f.rows[2].toggle.disabled,false);
- f.rows[0].toggle.checked=true;f.rows[0].model.value='invented:model';f.rows[1].model.value='cloud-alias';f.rows[0].toggle.onchange!();
+ await f.rows[0].refreshModels.onclick!();
+ f.rows[0].model.value='invented:model';f.rows[1].model.value='cloud-alias';f.rows[0].model.oninput!();
  assert.equal(f.elements.run.disabled,true);assert.match(f.elements.selectionError.textContent,/model available on this machine/);
  f.rows[0].model.value='installed:small';f.rows[0].model.oninput!();assert.equal(f.elements.run.disabled,false);assert.equal(f.requests.length,0);
 });
-test('a removed local model or unavailable daemon clears local selection and can recover',async()=>{
+test('a removed local model or unavailable daemon blocks dispatch and can recover without losing the choice',async()=>{
  let state='installed';
  const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async()=>state==='error'?{ok:false,json:async()=>({error:'Ollama is unavailable.'})}:{ok:true,json:async()=>({models:state==='installed'?['installed:small']:[],total:state==='installed'?1:0,source:'local-ollama-registry',truncated:false,unsupported:0})});
- const card=f.elements.ollamaChoices.children[0];
- await card.children[5].onclick!();f.rows[0].toggle.checked=true;f.rows[0].toggle.onchange!();
- state='empty';await card.children[5].onclick!();assert.equal(f.rows[0].toggle.checked,false);assert.equal(f.rows[0].toggle.disabled,true);
- state='installed';await card.children[5].onclick!();assert.equal(f.rows[0].toggle.disabled,false);
- f.rows[0].toggle.checked=true;f.rows[0].toggle.onchange!();state='error';await card.children[5].onclick!();assert.equal(f.rows[0].toggle.checked,false);assert.equal(f.rows[0].toggle.disabled,true);assert.equal(f.rows[1].toggle.disabled,false);assert.equal(f.requests.length,0);
+ const row=f.rows[0];
+ await row.refreshModels.onclick!();row.model.value='installed:small';f.rows[1].model.value='cloud-alias';row.model.oninput!();assert.equal(f.elements.run.disabled,false);
+ state='empty';await row.refreshModels.onclick!();assert.equal(f.elements.run.disabled,true);assert.equal(row.model.value,'installed:small');
+ state='installed';await row.refreshModels.onclick!();assert.equal(f.elements.run.disabled,false);
+ state='error';await row.refreshModels.onclick!();assert.equal(f.elements.run.disabled,true);assert.equal(row.model.value,'installed:small');assert.equal(row.provider.disabled,false);assert.equal(f.requests.length,0);
 });
 test('saved Ollama selection and accounting reopen without model discovery or inference',async()=>{
  const saved={id:'saved-id',prompt:'Old task',status:'completed',readOnly:true,maxRounds:3,calls:2,spendKnownUSD:0,spendIncomplete:true,workflowMode:'targeted',targetedConfig:{author:'ollama-local',checks:[]},selection:{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'saved-local','ollama-cloud':'saved-cloud'}},entries:[],tokenAccounting:{knownTotalTokens:120,missingCalls:0,calls:[]}};
@@ -107,24 +164,24 @@ test('saved Ollama selection and accounting reopen without model discovery or in
  f.elements.savedSessions.value='saved-id';await f.elements.openSaved.onclick!();
  assert.equal(f.rows[0].model.value,'saved-local');assert.equal(f.rows[1].model.value,'saved-cloud');assert.match(f.elements.tokenTotals.textContent,/120/);assert.equal(f.requests.length,0);assert.match(f.elements.roleNote.textContent,/model default effort/);
 });
-test('UI hydrates defaults, requires two, disables deselected models and updates call bounds',async()=>{
+test('UI hydrates only participating rows and requires a provider and valid model for every row',async()=>{
  const {elements,rows,requests}=await setup();
- assert.equal(rows.length,3);assert.equal(rows[0].model.placeholder,'codex-default');assert.equal(rows[2].model.disabled,true);
+ assert.equal(rows.length,2);assert.equal(rows[0].model.placeholder,'codex-default');assert.equal(rows[0].title.textContent,'Participant 1');assert.equal(rows[1].title.textContent,'Participant 2');
  assert.equal(elements.run.disabled,false);assert.equal(elements.maxCalls.textContent,6);
- rows[1].toggle.checked=false;rows[1].toggle.onchange!();assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/at least two/);
+ rows[1].provider.value='';rows[1].provider.onchange!();assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/available provider/);
  await elements.run.onclick!();assert.equal(requests.length,0);
- rows[2].toggle.checked=true;rows[2].toggle.onchange!();assert.equal(elements.run.disabled,false);assert.equal(rows[2].model.disabled,false);
- rows[2].model.value='--bad';rows[2].model.oninput!();assert.equal(elements.run.disabled,true);
+ rows[1].provider.value='grok';rows[1].provider.onchange!();assert.equal(elements.run.disabled,false);assert.equal(rows[1].model.disabled,false);
+ rows[1].model.value='--bad';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);
 });
 test('UI sends only selected models, freezes running controls, handles completion and preserves user choices',async()=>{
- const {elements,rows,requests,streams}=await setup();rows[0].model.value=' chosen-model ';rows[2].model.value='ignored';
+ const ui=await setup();const {elements,rows,requests,streams}=ui;rows[0].model.value=' chosen-model ';
  await elements.run.onclick!();
  assert.deepEqual(requests[0].selection,{providers:['codex','claude'],models:{codex:'chosen-model',claude:''}});
- assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.toggle.disabled&&row.model.disabled));
+ assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.provider.disabled&&row.model.disabled));assert.equal(elements.addParticipant.disabled,true);
  await elements.run.onclick!();assert.equal(requests.length,1);
  streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',spendKnownUSD:0.01,spendIncomplete:true})});
  assert.equal(elements.run.disabled,false);assert.match(elements.cost.textContent,/unknown costs/);assert.equal(streams[0].closed,true);
- rows[2].toggle.checked=true;rows[2].toggle.onchange!();assert.equal(elements.plannedCalls.textContent,9);assert.equal(elements.maxCalls.textContent,6);
+ await elements.addParticipant.onclick!();ui.rows[2].provider.value='grok';ui.rows[2].provider.onchange!();assert.equal(elements.plannedCalls.textContent,9);assert.equal(elements.maxCalls.textContent,6);
  assert.equal(rows[0].model.value,' chosen-model ');assert.equal(elements.report.style.display,'inline');
 });
 test('UI fails closed on configuration failure and recovers controls after rejected request',async()=>{
@@ -149,12 +206,12 @@ test('UI sends optional context with grounding off and displays the assessed rec
 
 test('UI opens saved sessions with exact responses and outcome using GET only, without an EventSource or new discussion',async()=>{
  const saved={id:'saved-id',prompt:'Saved <idea>',context:'Original context',maxRounds:3,status:'completed',readOnly:true,calls:9,maxCalls:9,spendKnownUSD:0.1,spendIncomplete:true,evidence:null,selection:{providers:['codex','claude','grok'],models:{codex:'saved-codex',claude:'saved-claude',grok:'saved-grok'}},entries:[1,2,3].flatMap(round=>['codex','claude','grok'].map(agent=>({round,agent,text:`<b>${agent} ${round}</b>`}))),outcome:{recommendation:'Run a pilot',status:'direction-alignment',coverage:{valid:3,expected:3},proposalBy:'codex',supporters:['codex','claude','grok'],positions:[],nextSteps:['Measure'],unresolved:[{agent:'grok',text:'Timing disputed'}],caveat:'Not correctness'}};
- const {elements,rows,requests,streams}=await setup(false,false,saved,true);
+ const ui=await setup(false,false,saved,true);const {elements,requests,streams}=ui;
  elements.savedSessions.value='saved-id';elements.savedSessions.onchange!();await elements.openSaved.onclick!();
  assert.equal(elements.run.disabled,true);await elements.run.onclick!();
  assert.equal(requests.length,0);assert.equal(streams.length,0);assert.equal(elements.status.textContent,'completed');assert.equal(elements.calls.textContent,9);assert.equal(elements.maxCalls.textContent,9);
  assert.equal(elements.feed.children.filter(e=>['codex','claude','grok'].some(id=>e.className==='message '+id)).length,9);
- assert.match(elements.outcome.textContent,/Aligned direction · proposals differ/);assert.match(elements.outcome.textContent,/Timing disputed/);assert.equal(rows[0].model.value,'saved-codex');assert.equal(elements.question.value,saved.prompt);
+ assert.match(elements.outcome.textContent,/Aligned direction · proposals differ/);assert.match(elements.outcome.textContent,/Timing disputed/);assert.equal(ui.rows[0].model.value,'saved-codex');assert.equal(elements.question.value,saved.prompt);
  assert.equal(elements.send.disabled,true);assert.equal(elements.cancel.disabled,true);assert.match(elements.reviewNotice.textContent,/read-only/);assert.match(elements.cost.textContent,/unknown costs/);
  assert.equal(elements.report.href,'/api/sessions/saved-id/report');
 });
