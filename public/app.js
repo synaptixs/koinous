@@ -57,17 +57,26 @@ function refresh() {
   const invalidModel = Object.values(chosen.models).some(value => value.length > 128 || (value && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value)));
   const selected=rows.filter(row=>row.toggle.checked);
   const duplicateModel=selected.some(row=>selected.some(other=>other!==row&&other.provider===row.provider&&(!(row.model.value.trim()||row.defaultModel)||!(other.model.value.trim()||other.defaultModel)||(row.model.value.trim()||row.defaultModel)===(other.model.value.trim()||other.defaultModel))));
-  const error = !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const targeted=$('workflowMode').value==='targeted';
+  const previousAuthor=$('author').value;
+  $('author').replaceChildren();
+  for(const id of chosen.providers){const option=viewNode('option',id);option.value=id;$('author').append(option);}
+  $('author').value=chosen.providers.includes(previousAuthor)?previousAuthor:chosen.providers.includes('claude')?'claude':chosen.providers[0]||'';
+  $('stageTags').replaceChildren();for(const label of targeted?['1 · Draft','2 · Targeted review','3 · Revision if needed']:['1 · Independent','2 · Critique','3 · Collaborate'])$('stageTags').append(viewNode('span',label,'tag'));
+  $('roleNote').textContent=targeted?'Author '+$('author').value+' · low effort; reviewer '+(chosen.providers.find(id=>id!==$('author').value)||'unselected')+' · medium effort. Fresh requests; at most three calls.':'Full discussion: participants exchange independent positions over the selected rounds.';
+  const error = targeted&&(chosen.providers.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI/Claude participants.': !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
   $('run').disabled = busy || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
   for (const id of ['savedProvider','savedModel','savedFrom','savedTo','savedSessions','refreshSaved','savedSearch','searchSaved','clearSaved']) $(id).disabled = busy || historyLoading;
   $('previousSaved').disabled = busy || historyLoading || !historyPrevious;
   $('nextSaved').disabled = busy || historyLoading || !historyNext;
-  $('rounds').disabled = busy;
+  $('rounds').disabled = busy || targeted;
+  for(const id of ['workflowMode','author','acceptanceChecks'])$(id).disabled=busy;
+  $('usePair').disabled=busy||!rows.some(r=>r.id==='claude')||!rows.some(r=>r.id==='codex');
   for(const id of ['researchMode','researchQuery']) $(id).disabled = busy;
   for (const row of rows) { row.toggle.disabled = busy; row.model.disabled = busy || !row.toggle.checked; }
-  $('plannedCalls').textContent = chosen.providers.length * Number($('rounds').value);
+  $('plannedCalls').textContent = targeted?3:chosen.providers.length * Number($('rounds').value);
   if (!sessionId) $('maxCalls').textContent = $('plannedCalls').textContent;
   return !error;
 }
@@ -122,7 +131,8 @@ function peerChangeView(position) {
   return block;
 }
 function appendResponse(entry) {
-  const title='Round '+entry.round+' · '+entry.agent;
+  const title=(entry.stage||'Round '+entry.round)+' · '+entry.agent;
+  if(entry.stage){append(title,entry.text,entry.agent);return;}
   const original=typeof entry.text==='string'?entry.text:'';
   const fallback=()=>{
     append(title,original,entry.agent);
@@ -187,34 +197,38 @@ const configurationReady = fetch('/api/health').then(async response => {
   for (const provider of health.availableParticipants || health.availableProviders) {
     const card = document.createElement('div'); card.className = 'choice';
     const label = document.createElement('label');
-    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = health.agents.includes(provider.id); toggle.id = 'provider-' + provider.id;
+    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = health.agents.includes(provider.id)&&($('workflowMode').value!=='targeted'||health.agents.filter(id=>id!=='grok').slice(0,2).includes(provider.id)); toggle.id = 'provider-' + provider.id;
     label.append(toggle, document.createTextNode(provider.label));
     const modelLabel = document.createElement('label'); modelLabel.textContent = provider.label + ' model ID'; modelLabel.htmlFor = 'model-' + provider.id;
     const model = document.createElement('input'); model.type = 'text'; model.id = modelLabel.htmlFor; model.maxLength = 128; model.placeholder = provider.defaultModel || 'SDK default'; model.autocomplete = 'off';
     const note = document.createElement('small'); note.textContent = 'Default: ' + (provider.defaultModel || 'SDK default') + (provider.id === 'grok' ? ' · Build runtime must be configured' : '');
     card.append(label, modelLabel, model, note); $('providerChoices').append(card);
+    if($('workflowMode').value==='targeted'&&!provider.defaultModel&&['claude','codex'].includes(provider.id))model.value=provider.id==='claude'?'claude-sonnet-5-5':'gpt-6-astra';
     rows.push({id: provider.id, provider: provider.provider || provider.id, defaultModel:provider.defaultModel, toggle, model}); toggle.onchange = refresh; model.oninput = refresh;
   }
   ready = true; refresh();
   if (!inferenceEnabled) $('selectionError').textContent = 'Inference is disabled. Saved discussions can still be reviewed.';
 }).catch(() => { $('providers').textContent = 'Provider configuration unavailable'; refresh(); });
 $('rounds').onchange = refresh;
+$('workflowMode').onchange=refresh;$('author').onchange=refresh;
+$('usePair').onclick=()=>{for(const row of rows){row.toggle.checked=['claude','codex'].includes(row.id);if(row.id==='claude')row.model.value='claude-sonnet-5-5';if(row.id==='codex')row.model.value='gpt-6-astra';}$('workflowMode').value='targeted';$('author').value='claude';refresh();};
 function finish(status) {
   busy = false; $('status').textContent = status; $('send').disabled = true; $('cancel').disabled = true;
   if (events) events.close(); refresh();
 }
 $('run').onclick = async () => {
   if (busy || !refresh() || !inferenceEnabled) return;
-  const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection()};
+  const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection(),workflowMode:$('workflowMode').value};
+  if(request.workflowMode==='targeted'){request.maxRounds=3;request.author=$('author').value;request.checks=$('acceptanceChecks').value.split('\n').map(s=>s.trim()).filter(Boolean);}
   if($('researchMode').value==='wikipedia')request.research={mode:'wikipedia',query:$('researchQuery').value};
   sessionId = null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; refresh();
   if (events) events.close();
   $('outcome').textContent = 'Available after the discussion.'; $('evidence').textContent = 'Idea and optional context';
-  $('feed').replaceChildren(); $('status').textContent = 'Creating'; $('calls').textContent = '0'; $('cost').textContent = 'Unknown'; $('report').style.display = 'none';
+  $('feed').replaceChildren(); $('status').textContent = 'Creating'; $('calls').textContent = '0'; $('cost').textContent = 'Unknown'; $('report').style.display = 'none';$('jsonReport').style.display='none';$('tokenTotals').textContent='Awaiting token accounting';$('tokenDetails').replaceChildren();
   try {
     const response = await fetch('/api/sessions', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)});
     const data = await response.json(); if (!response.ok) throw Error(data.error);
-    sessionId = data.id; $('send').disabled = false; $('cancel').disabled = false;
+    sessionId = data.id; $('send').disabled = request.workflowMode==='targeted'; $('cancel').disabled = false;
     events = new EventSource('/api/sessions/' + sessionId + '/events');
     events.onmessage = event => {
       const x = JSON.parse(event.data);
@@ -226,18 +240,19 @@ $('run').onclick = async () => {
         case 'runtime.cleaned': append('Runtime · ' + x.agent, 'Runtime cleanup completed'); break;
         case 'research.started': $('status').textContent='Researching'; append('Research query',x.query); break;
         case 'research.completed': $('evidence').textContent=x.sources.length+' Wikipedia background sources'; append('Retrieved sources',x.sources.map(s=>s.id+' · '+s.uri+'\n'+s.text).join('\n\n')); break;
+        case 'targeted.assessed': showTargeted(x.targeted); break;
         case 'workflow.assessed': showWorkflow(x.workflow); break;
         case 'grounding.skipped': $('evidence').textContent = 'Idea and optional context'; break;
         case 'discussion.assessed': showOutcome(x.outcome); break;
         case 'position.invalid': append('Final position unavailable · ' + x.agent, x.reason); break;
         case 'grounding.pinned': $('evidence').textContent = x.snapshotId; break;
-        case 'round.started': $('status').textContent = 'Running'; append('Round ' + x.round, 'Providers are running in parallel'); break;
+        case 'round.started': $('status').textContent = 'Running'; append(x.stage||'Round ' + x.round, x.stage?'One fresh request for this stage':'Providers are running in parallel'); break;
         case 'agent.started': $('calls').textContent = x.call; break;
         case 'agent.completed': appendResponse(x); $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); break;
         case 'agent.error': append('Provider error · ' + x.agent, x.error); break;
         case 'human.intervention': append('Human intervention', x.message); break;
         case 'session.error': append('Error', x.error); break;
-        case 'session.finished': finish(x.status); $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline'; syncSavedURL(); break;
+        case 'session.finished': showTokens(x.tokenAccounting); finish(x.status);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline'; $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline'; syncSavedURL(); break;
       }
     };
     events.onerror = () => { append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost'; };
@@ -250,6 +265,27 @@ $('send').onclick = async () => {
 };
 $('cancel').onclick = async () => { if (sessionId) await fetch('/api/sessions/' + sessionId + '/cancel', {method: 'POST'}); };
 
+function showTokens(accounting){
+  $('tokenDetails').replaceChildren();
+  if(!accounting){$('tokenTotals').textContent='Token accounting unavailable for this record.';return;}
+  $('tokenTotals').textContent=accounting.knownTotalTokens.toLocaleString()+' known total tokens · '+accounting.missingCalls+' calls missing usage';
+  const table=viewNode('table'),head=viewNode('tr');for(const title of ['Participant / stage','Input','Output','Total','Primary','Helpers','Unclassified','Time (ms)'])head.append(viewNode('th',title));table.append(head);
+  const show=v=>v===null||v===undefined?'unknown':v.toLocaleString();
+  for(const c of accounting.calls){const row=viewNode('tr');for(const v of [c.agent+' / '+c.stage,show(c.inputTokens),show(c.outputTokens),show(c.totalTokens),show(c.primaryTokens),show(c.auxiliaryTokens),show(c.unclassifiedTokens),show(c.durationMs)])row.append(viewNode('td',v));table.append(row);}
+  const wrap=viewNode('div',undefined,'table-scroll');wrap.append(table);$('tokenDetails').append(wrap,viewNode('p',accounting.scope));
+}
+function showTargeted(a){
+  const root=$('outcome');root.replaceChildren();
+  const hero=viewSection(a.complete?'Targeted review complete':'Targeted review incomplete',readableText(a.final?.recommendation||'No usable draft.'));
+  hero.append(viewNode('p',a.reason),viewNode('p','Author: '+a.author+' · Reviewer: '+a.reviewer+' · Revision: '+a.revision));root.append(hero);
+  if(a.final)root.append(viewSection('Why this approach',readableText(a.final.rationale)),viewSection('Next actions',viewList(a.final.nextSteps,true)),viewSection('Risks',viewList(a.final.risks)));
+  const findings=viewSection('What the reviewer flagged');
+  for(const f of a.review?.findings||[])findings.append(viewSection(f.id+' · '+f.severity+' / '+f.category,viewNode('p','Reference: '+f.claimId),readableText(f.failureScenario),readableText('Consequence: '+f.consequence),readableText('Correction: '+f.correction),readableText('Acceptance test: '+f.acceptanceTest)));
+  if(!a.review)findings.append(viewNode('p','No valid review available.'));else if(!a.review.findings.length)findings.append(viewNode('p','No material issue found. This is not proof of correctness.'));
+  root.append(findings,viewSection('What changed',viewNode('p','Changed fields: '+(a.changedFields.join(', ')||'none')),viewList(a.responses.map(r=>r.findingId+' — '+r.decision+': '+r.reason+' Change: '+(r.change||'none')))));
+  root.append(viewNode('p','Reviewer findings and author responses are model declarations. Addressed does not mean independently verified.'));
+  root.append(viewDetails('Original draft',viewNode('pre',JSON.stringify(a.draft,null,2))),viewDetails('Final answer and claims',viewNode('pre',JSON.stringify(a.final,null,2))));
+}
 function showWorkflow(w) {
   const card=viewNode('article',undefined,'message coverage-card'),body=viewNode('div');
   card.append(viewNode('h3','Research and collaboration coverage','meta'),body);
@@ -349,9 +385,9 @@ async function openSaved(id) {
     sessionId = s.id;
     $('feed').replaceChildren();
     $('question').value = s.prompt; $('context').value = s.context || '';
-    $('rounds').value = String(s.maxRounds);
-    $('researchMode').value=s.workflow?.research.status==='completed'?'wikipedia':'none';
-    $('researchQuery').value=s.workflow?.research.query||'';
+    $('rounds').value = String(s.maxRounds);$('workflowMode').value=s.workflowMode||'discussion';$('author').value=s.targetedConfig?.author||'';$('acceptanceChecks').value=(s.targetedConfig?.checks||[]).join('\n');
+    $('researchMode').value=s.research?.mode||(s.workflow?.research.status==='completed'?'wikipedia':'none');
+    $('researchQuery').value=s.research?.query||s.workflow?.research.query||'';
     if (s.selection) for (const row of rows) { row.toggle.checked = s.selection.providers.includes(row.id); row.model.value = s.selection.models[row.id] || ''; }
     $('calls').textContent = s.calls; $('maxCalls').textContent = s.maxCalls ?? 'Unknown';
     $('cost').textContent = '$' + Number(s.spendKnownUSD).toFixed(4) + (s.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)');
@@ -363,7 +399,8 @@ async function openSaved(id) {
     }
     for (const failure of s.failures || []) append('Recorded failure · ' + (failure.agent || 'session'), failure.error || failure.reason || failure.type);
     if(s.workflow)showWorkflow(s.workflow);
-    if (s.outcome) showOutcome(s.outcome); else $('outcome').textContent = 'No agreement assessment was recorded for this older discussion. Review the original transcript and report.';
+    showTokens(s.tokenAccounting);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline';
+    if(s.targeted)showTargeted(s.targeted);else if (s.outcome) showOutcome(s.outcome); else $('outcome').textContent = 'No agreement assessment was recorded for this older discussion. Review the original transcript and report.';
     $('reviewNotice').textContent = 'Reviewing saved discussion ' + s.id + ' · read-only. No model calls were made to open it.';
     $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline';
     finish(s.status);

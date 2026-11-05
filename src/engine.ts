@@ -1,3 +1,6 @@
+import {runTargeted} from './targeted-engine.ts';
+import type {AdapterFactory} from './targeted-engine.ts';
+import {tokenAccounting} from './token-accounting.ts';
 import {researchRequest,researchEvidence} from './research.ts';
 import {workflowAssessment,responseValidation} from './discussion-workflow.ts';
 import {budgetPolicy,BudgetLedger} from './budgets.ts';
@@ -17,10 +20,12 @@ import {validateParticipants,providerFor} from './participants.ts';
 const MAX_USD=Number(process.env.MAX_SESSION_USD || '3');
 export class Engine extends EventEmitter {
   sessions=new Map<string,Session>();
-  private createAdapters: (session: Session) => Adapter[]; private outputDir: string; private researcher:typeof researchEvidence;
+  private createAdapters: AdapterFactory; private outputDir: string; private researcher:typeof researchEvidence;
   // The factory must return fresh instances: adapters may retain provider conversations.
-  constructor(createAdapters:(session: Session)=>Adapter[],outputDir:string,researcher:typeof researchEvidence=researchEvidence) {super();this.researcher=researcher;this.createAdapters=createAdapters;this.outputDir=outputDir;mkdirSync(outputDir,{recursive:true});}
-  create(prompt:string,maxRounds=3,selection?:Selection,options:{context?:unknown;grounding?:unknown;budget?:unknown;research?:unknown}={}):Session{
+  constructor(createAdapters:AdapterFactory,outputDir:string,researcher:typeof researchEvidence=researchEvidence) {super();this.researcher=researcher;this.createAdapters=createAdapters;this.outputDir=outputDir;mkdirSync(outputDir,{recursive:true});}
+  create(prompt:string,maxRounds=3,selection?:Selection,options:{context?:unknown;grounding?:unknown;budget?:unknown;research?:unknown;workflowMode?:unknown;author?:unknown;checks?:unknown}={}):Session{
+    const workflowMode=options.workflowMode??'discussion';
+    if(workflowMode!=='discussion'&&workflowMode!=='targeted')throw Error('Unknown workflow mode');
     const policy=budgetPolicy(options.budget);
     const research=researchRequest(options.research);
     const snapshot=selection===undefined?undefined:resolveSelection(selection,selection);
@@ -31,13 +36,25 @@ export class Engine extends EventEmitter {
     const grounding=options.grounding??'none';
     if(grounding!=='none'&&grounding!=='configured')throw Error('Grounding must be none or configured');
     if(research&&grounding!=='none')throw Error('Choose research or configured grounding, not both');
-    const id=randomUUID();const s:Session={id,prompt:prompt.trim(),maxRounds,research,context,grounding,selection:snapshot,status:'created',events:[],entries:[],interventions:[],calls:0,spendKnownUSD:0,spendIncomplete:false,cancel:new AbortController()};
+    let targetedConfig:Session['targetedConfig'];
+    if(workflowMode==='targeted'){
+      if(policy.maxCalls<2)throw Error('Targeted review requires a budget of at least two calls');
+      if(!snapshot||snapshot.providers.length!==2||snapshot.providers.some(id=>providerFor(id)==='grok'))throw Error('Targeted review requires exactly two OpenAI/Claude participants');
+      const author=options.author??(snapshot.providers.includes('claude')?'claude':snapshot.providers[0]);
+      if(!snapshot.providers.includes(author as never))throw Error('Author must be a selected participant');
+      const checks=options.checks??[];
+      if(!Array.isArray(checks)||checks.length>6||checks.some(c=>typeof c!=='string'||!c.trim()||c.length>300))throw Error('Supply at most six acceptance checks of 1–300 characters');
+      targetedConfig={author:author as NonNullable<Session['targetedConfig']>['author'],reviewer:snapshot.providers.find(id=>id!==author)!,checks:[...checks]};maxRounds=3;
+    }
+    const id=randomUUID();const s:Session={workflowMode,targetedConfig,id,prompt:prompt.trim(),maxRounds,research,context,grounding,selection:snapshot,status:'created',events:[],entries:[],interventions:[],calls:0,spendKnownUSD:0,spendIncomplete:false,cancel:new AbortController()};
+    Object.defineProperty(s,'workflowMode',{value:workflowMode,enumerable:true,writable:false});
+    if(targetedConfig){Object.freeze(targetedConfig.checks);Object.freeze(targetedConfig);Object.defineProperty(s,'targetedConfig',{value:targetedConfig,enumerable:true,writable:false});}
     Object.defineProperty(s,'budgetPolicy',{value:policy,enumerable:true,writable:false});
     Object.defineProperty(s,'research',{value:research,enumerable:true,writable:false});
     Object.defineProperty(s,'context',{value:context,enumerable:true,writable:false});
     Object.defineProperty(s,'grounding',{value:grounding,enumerable:true,writable:false});
     Object.defineProperty(s,'selection',{value:snapshot,enumerable:true,writable:false});
-    this.sessions.set(id,s);mkdirSync(join(this.outputDir,id));this.emitEvent(s,'session.created',{prompt:s.prompt,maxRounds,selection:s.selection,context:s.context,grounding:s.grounding,research,budgetPolicy:policy});
+    this.sessions.set(id,s);mkdirSync(join(this.outputDir,id));this.emitEvent(s,'session.created',{prompt:s.prompt,maxRounds,workflowMode,targetedConfig,selection:s.selection,context:s.context,grounding:s.grounding,research,budgetPolicy:policy});
     return s;
   }
   emitEvent(s:Session,type:string,data:Record<string,unknown>={}){
@@ -46,6 +63,7 @@ export class Engine extends EventEmitter {
     this.emit(s.id,evt);
   }
   intervene(s:Session,message:string){
+    if(s.workflowMode==='targeted')throw Error('Targeted review uses fixed inputs; start a new session to change them');
     if(!['created','running'].includes(s.status))throw new Error('Session is not active');
     if(!message.trim()||message.length>1000) throw new Error('Intervention must contain 1–1000 characters');
     s.interventions.push(message.trim());this.emitEvent(s,'human.intervention',{message:message.trim(),note:'Included at next discussion round boundary, if any'});
@@ -53,6 +71,7 @@ export class Engine extends EventEmitter {
   cancel(s:Session){if(s.status==='running'||s.status==='created'){s.cancel.abort();this.emitEvent(s,'cancel.requested');}}
   async run(s:Session){
     if(this.sessions.get(s.id)!==s || s.status!=='created')throw new Error('Session can only run once on its owning engine');
+    if(s.workflowMode==='targeted')return runTargeted(s,this.createAdapters,this.emitEvent.bind(this),this.outputDir,this.researcher);
     s.status='running'; this.emitEvent(s,'session.started');
     let adapters:Adapter[]=[];
     let ledger:BudgetLedger|undefined=new BudgetLedger(s.budgetPolicy!);
@@ -170,6 +189,6 @@ export class Engine extends EventEmitter {
     this.emitEvent(s,'discussion.assessed',{outcome:s.outcome});
     s.report=makeReport(s);
     writeFileSync(join(this.outputDir,s.id,'report.md'),s.report,'utf8');
-    this.emitEvent(s,'session.finished',{status:s.status,calls:s.calls,budget:s.budget,usage:usageSummary(s.events),spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete});
+    this.emitEvent(s,'session.finished',{status:s.status,calls:s.calls,budget:s.budget,usage:usageSummary(s.events),tokenAccounting:tokenAccounting(s.events),spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete});
   }
 }

@@ -36,7 +36,7 @@ Open **http://127.0.0.1:3030** or the sample URL printed in the terminal.
 
 1. Open the bundled synthetic discussion, or enter your own idea.
 2. Keep research set to **Use idea and supplied context** for an offline demo.
-3. Keep **three rounds** and select **Start discussion**.
+3. Choose **Draft + targeted review**, choose the author, and select **Start discussion**.
 4. Read the decision briefs and expand the original responses when needed.
 
 The demo uses deterministic mock responses. It needs no dependency installation,
@@ -71,9 +71,9 @@ checks subscription login, and opens missing provider sign-in flows when needed.
 2. Open the localhost URL printed in the terminal.
 3. Select models available to your subscriptions. In OpenAI-only mode, enter
    **two different model IDs**, one for each participant.
-4. Enter your idea and optional context, keep **three rounds**, and select
-   **Start discussion**.
-5. Review the decision briefs, original responses, and downloadable report.
+4. Enter your idea and optional context. Keep **Draft + targeted review**; choose
+   the author or use the **Sonnet 5.5 + Astra** preset, then select **Start discussion**.
+5. Review the findings, recorded changes, token accounting and downloadable reports.
 
 Setup sends no model prompts; **Start discussion** sends prompts and uses your
 subscription allowance. Grok stays off in both launchers. Stop with **Ctrl+C**.
@@ -88,6 +88,33 @@ for account setup and manual controls. Advanced Grok runtime instructions are in
 [engineering reference](REFERENCE.md#grok-build-subscription-adapter-inference-requires-explicit-opt-in).
 
 ## How it works
+
+**Draft + targeted review is the UI default.** Select exactly two OpenAI/Claude
+participants and choose the author. The author runs at low effort and the reviewer
+at medium effort; the preset selects Sonnet 5.5 and Astra. Model availability still
+depends on your subscription. Optional acceptance checks define what a sound answer
+must get right.
+
+| Stage | What happens | Application calls |
+|---|---|---:|
+| Draft | Author writes one concise recommendation | 1 |
+| Targeted review | Reviewer identifies up to three concrete defects, or no material issue | 1 |
+| Conditional revision | Author responds only when material actionable findings exist | 0 or 1 |
+
+Each stage uses a fresh request with bounded task/draft/finding data. Targeted
+requests use an empty working directory and text-only instructions. No full
+conversation history, extra judge, synthesis or automatic repair/retry call is
+added. Malformed responses stop the workflow and preserve originals. Cosmetic-only
+feedback keeps the original draft. Authors can address, reject or leave findings
+unresolved; **addressed is a declaration, not a verified fix**.
+
+The UI and Markdown/JSON exports show the original draft, reviewer findings,
+author responses, changed fields and per-call input/output, primary, helper and
+unclassified tokens. Missing usage stays unknown; cached/reasoning counters are
+subsets. These are provider accounting values, not subscription invoices. Token
+savings and quality gains from this workflow have **not been measured live**.
+
+Choose **Full discussion** to retain the earlier symmetric workflow:
 
 | Round | What participants do | What you receive |
 |---|---|---|
@@ -124,7 +151,8 @@ and dissent remain visible; similar answers are not silently merged.
 Older sessions show **Not recorded** for fields they never contained. Reopening a
 session or downloading its Markdown report makes no model calls and preserves the
 original saved assessment and responses. Use `?format=original` on a report URL to
-retrieve the exact stored report.
+retrieve the exact stored report. The JSON download includes canonical token
+accounting and recorded targeted-review data when available.
 
 The [decision-brief contract](REFERENCE.md#decision-brief) documents validation,
 field limits, and saved-session compatibility.

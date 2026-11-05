@@ -15,9 +15,11 @@ fallback. An existing login is reused, so confirm it is the intended corporate
 account before starting. Koinous does not select an enterprise workspace for you.
 
 In the UI, enter **two different model IDs** available through that account,
-one for each OpenAI participant. Keep three rounds for six responses: initial
-analysis, peer review, and revised recommendations. Each participant has a separate
-conversation, peer identity, selected model and accounting. Both use the same
+one for each OpenAI participant. The default targeted workflow uses a low-effort
+author, a medium-effort reviewer and a conditional low-effort revision (two or three
+calls). Choose the author in the UI. Full discussion remains available for the
+earlier three-round, six-response exchange. Each participant retains its selected
+model and accounting. Both use the same
 local subscription login. Start discussion sends prompts; setup sends none.
 Stop with Ctrl+C when finished.
 
@@ -49,7 +51,8 @@ No API-key fallback, credentials copied into the project, or model prompts durin
 setup. Login status confirms the method, not quota or model access. Grok stays off.
 
 Open the localhost URL printed in the terminal. Select models available to your
-subscriptions, enter an idea, keep three rounds, and click Start discussion. Only
+subscriptions, enter an idea, keep Draft + targeted review, choose the author,
+and click Start discussion. Only
 that click sends model prompts and uses subscription quota. Stop with Ctrl+C to
 end the server's inference opt-in. Startup errors stop without automatic retries.
 Existing manual setup commands below remain available for troubleshooting.
@@ -107,14 +110,13 @@ reliability for every idea. The mock walkthrough remains available.
 
 ## Five-minute walkthrough
 
-1. Explain: “Independent analysis → peer critique → revised positions → one attributed recommendation, with disagreements preserved.”
+1. Explain: “One draft → focused defect review → revision only for material findings, with unresolved issues preserved.”
 2. Enter: “How should developers search source code and documentation: lexical, semantic, or hybrid retrieval?”
-3. Keep Codex and Claude selected, three rounds, and “Use idea and supplied context”.
+3. Keep Codex and Claude selected, Draft + targeted review, Claude as author, and “Use idea and supplied context”.
 4. Start discussion. These are deterministic mock stand-ins, not actual model opinions;
    model IDs do not select real models in mock mode. No external research is requested.
-5. Show the six replies, peer responses, final recommendation, numbered next actions,
-   dissent, validation diagnostics and usage. Matching directions are not proof of correctness.
-6. Download the Markdown report. Show its readable sections and original-response blocks.
+5. Show the two mock replies, skipped revision, retained draft and per-call token accounting. Mock findings and zero tokens illustrate plumbing only. Offline tests exercise the material-finding/third-call branch.
+6. Download Markdown and JSON. Show findings, changes, original responses and identical token accounting.
 7. Reload and reopen the saved discussion to demonstrate persistence without inference.
 
 ## Presenting the existing real PKG-search discussion
@@ -171,8 +173,9 @@ npm run start:real -- --enable-inference
 ```
 
 This checks both subscription logins and starts localhost:3030 with Codex and Claude.
-Choose models in the UI, enter your idea, and press Start discussion. Up to six
-application calls are allowed for a three-round discussion; internal SDK behavior
+Choose models and the author in the UI, enter your idea, and press Start discussion.
+Targeted review uses two or three application calls; Full discussion retains up to
+six calls for two participants. In either mode, internal SDK behavior
 and tokens are not a hard monetary ceiling. Unknown subscription costs stay explicit.
 The launcher itself sends no model prompt. It does not load or change .env.
 Without the flag it refuses startup, even if live flags were inherited from the shell.

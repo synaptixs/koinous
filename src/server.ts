@@ -1,3 +1,4 @@
+import {tokenAccounting} from './token-accounting.ts';
 import {PARTICIPANTS,providerFor} from './participants.ts';
 import {workflowAssessment,responseValidation} from './discussion-workflow.ts';
 import {createServer} from 'node:http';
@@ -26,7 +27,7 @@ const providers=[...resolveSelection(undefined,defaults,true).providers];
 assertProvidersEnabled(providers);
 const factory=options.adapterFactory ?? createAdapters;
 const outputDir=options.outputDir ?? resolve('runs');
-const engine=new Engine(session=>factory(mode,session.selection!.providers,session.selection!.models),outputDir);
+const engine=new Engine((session,stage)=>factory(mode,session.selection!.providers,session.selection!.models,stage?.effort,stage?.effort,!!stage),outputDir);
 const saved=new SavedSessions(outputDir);
 const html=readFileSync(new URL('../public/index.html',import.meta.url));
 const script=readFileSync(new URL('../public/app.js',import.meta.url));
@@ -59,7 +60,7 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
       // Constructing adapters validates transport/configuration but starts no subprocesses.
       factory(mode,selection.providers,selection.models);
       if(mode==='real'&&process.env.KOINOUS_ENABLE_INFERENCE!=='1')throw Error('Live inference is disabled; set KOINOUS_ENABLE_INFERENCE=1 only for an authorized run');
-      const s=engine.create(String(d.prompt || ''),boundedInt(d.maxRounds,3,1,3),selection,{context:d.context,grounding:d.grounding,budget:d.budget,research:d.research});
+      const s=engine.create(String(d.prompt || ''),boundedInt(d.maxRounds,3,1,3),selection,{context:d.context,grounding:d.grounding,budget:d.budget,research:d.research,workflowMode:d.workflowMode,author:d.author,checks:d.checks});
       json(res,201,{id:s.id,status:s.status,selection:s.selection});const running=engine.run(s);active.add(running);void running.then(()=>active.delete(running),()=>active.delete(running));return;
     }
     const match=url.pathname.match(/^\/api\/sessions\/([a-f0-9-]+)(?:\/(events|interventions|cancel|report))?$/);
@@ -68,8 +69,12 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
     const s=activeSession??saved.load(match[1]);if(!s)return json(res,404,{error:'Saved session unavailable, incomplete, or invalid'});
     if(req.method!=='GET'&&(!activeSession||TERMINAL.has(s.status)))return json(res,409,{error:'Finished discussions are read-only; start a new discussion to continue'});
     const action=match[2];
-    if(req.method==='GET'&&!action)return json(res,200,{id:s.id,status:s.status,readOnly:!activeSession||TERMINAL.has(s.status),maxRounds:s.maxRounds,prompt:s.prompt,context:s.context,grounding:s.grounding,outcome:s.outcome??null,workflow:workflowAssessment(s),participants:s.participants,selection:s.selection,maxCalls:s.budget?.policy.maxCalls??(s.participants?s.participants.length*s.maxRounds:null),calls:s.calls,budget:s.budget??null,spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete,evidence:s.evidence?{id:s.evidence.snapshotId,hash:s.evidence.hash}:null,entries:s.entries.map(entry=>({...entry,validation:responseValidation(entry)})),failures:s.events.filter(e=>['agent.error','budget.denied','discussion.stopped','session.error'].includes(e.type)),usage:usageSummary(s.events)});
+    if(req.method==='GET'&&!action)return json(res,200,{id:s.id,status:s.status,readOnly:!activeSession||TERMINAL.has(s.status),maxRounds:s.maxRounds,prompt:s.prompt,context:s.context,grounding:s.grounding,research:s.research,outcome:s.outcome??null,workflowMode:s.workflowMode??'discussion',targeted:s.targeted??null,targetedConfig:s.targetedConfig,tokenAccounting:tokenAccounting(s.events),workflow:s.workflowMode==='targeted'?null:workflowAssessment(s),participants:s.participants,selection:s.selection,maxCalls:s.budget?.policy.maxCalls??(s.participants?s.participants.length*s.maxRounds:null),calls:s.calls,budget:s.budget??null,spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete,evidence:s.evidence?{id:s.evidence.snapshotId,hash:s.evidence.hash}:null,entries:s.entries.map(entry=>({...entry,validation:s.workflowMode==='targeted'?undefined:responseValidation(entry)})),failures:s.events.filter(e=>['agent.error','budget.denied','discussion.stopped','session.error'].includes(e.type)),usage:usageSummary(s.events)});
     if(req.method==='GET'&&action==='report'){
+      if(url.searchParams.get('format')==='json'){
+        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="review-${s.id}.json"`,'Cache-Control':'no-store'});
+        return res.end(JSON.stringify({id:s.id,status:s.status,prompt:s.prompt,context:s.context,workflowMode:s.workflowMode??'discussion',research:s.research,targetedConfig:s.targetedConfig,targeted:s.targeted,selection:s.selection,evidence:s.evidence,durationMs:s.events.at(-1)?.durationMs??null,calls:s.calls,budget:s.budget,tokenAccounting:tokenAccounting(s.events),entries:s.entries,failures:s.events.filter(e=>['agent.error','discussion.stopped','session.error'].includes(e.type))},null,2));
+      }
       const original=url.searchParams.get('format')==='original';
       const report=!TERMINAL.has(s.status)?'# Discussion still in progress\n':original?s.report:makeReport(s,{preserveRecordedOutcome:true})+(!activeSession&&s.report?'\n## Original saved report\n\nPreserved verbatim for historical evidence and audit details; the readable sections above are a presentation of recorded data.\n\n'+originalMarkdown(s.report)+'\n':'');
       res.writeHead(200,{'Content-Type':'text/markdown; charset=utf-8','Content-Disposition':`attachment; filename="discussion-${s.id}${original?'-original':''}.md"`,'Cache-Control':'no-store'});
