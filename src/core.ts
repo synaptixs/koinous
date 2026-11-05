@@ -1,3 +1,7 @@
+import {tokenAccountingMarkdown} from './token-accounting.ts';
+import type {ModelAccounting} from './token-accounting.ts';
+import {targetedMarkdown} from './targeted-review.ts';
+import type {TargetedConfig,TargetedAssessment} from './targeted-review.ts';
 import {PARTICIPANTS,providerFor} from './participants.ts';
 import type {ParticipantId} from './participants.ts';
 import type {GrokDiagnostics} from './grok-diagnostics.ts';
@@ -15,12 +19,12 @@ import {usageSummary} from './provider-runtime.ts';
 export type AgentId = 'codex' | 'claude' | 'grok';
 export const AGENTS: AgentId[] = ['codex', 'claude', 'grok'];
 export type Round = 1 | 2 | 3;
-export type Entry = Reply & {agent: ParticipantId; round: Round; durationMs?: number;validation?:ResponseValidation;position?:Position|null};
+export type Entry = Reply & {agent: ParticipantId; round: Round; stage?:'draft'|'review'|'revision'; durationMs?: number;validation?:ResponseValidation;position?:Position|null};
 export type Usage = {inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; reasoningTokens?: number; usd?: number | null; costSource?: 'provider-estimate' | 'provider-reported' | 'mock'};
 export type Evidence = {snapshotId: string; hash: string; items: Array<{id: string; uri: string; text: string; provenance?:Provenance & {commit_sha:string;pipeline_id:string}}>; source: 'file' | 'mcp' | 'web'; publication?:{manifestSha256:string;repository:string;commitSha:string;pipelineId:string;indexes:string[];total:number;returned:number;truncated:boolean}};
 export type Event = {seq: number; at: string; type: string; [key: string]: unknown};
-export type Session = {readonly research?:Readonly<ResearchRequest>;readonly budgetPolicy?:BudgetPolicy;budget?:BudgetState;id: string; prompt: string; readonly context?:string; readonly grounding?:'none'|'configured'; outcome?:Outcome; status: string; maxRounds: number; participants?: ParticipantId[]; readonly selection?: Selection; events: Event[]; entries: Entry[]; interventions: string[]; calls: number; spendKnownUSD: number; spendIncomplete: boolean; evidence?: Evidence; report?: string; cancel: AbortController};
-export type Reply = {grokDiagnostics?:GrokDiagnostics;protocolTiming?:GrokProtocolTiming;text: string; usage?: Usage; model?: string; requestedModel?: string; responseId?: string; sessionId?: string};
+export type Session = {workflowMode?:'discussion'|'targeted';targetedConfig?:TargetedConfig;targeted?:TargetedAssessment;readonly research?:Readonly<ResearchRequest>;readonly budgetPolicy?:BudgetPolicy;budget?:BudgetState;id: string; prompt: string; readonly context?:string; readonly grounding?:'none'|'configured'; outcome?:Outcome; status: string; maxRounds: number; participants?: ParticipantId[]; readonly selection?: Selection; events: Event[]; entries: Entry[]; interventions: string[]; calls: number; spendKnownUSD: number; spendIncomplete: boolean; evidence?: Evidence; report?: string; cancel: AbortController};
+export type Reply = {accounting?:ModelAccounting;grokDiagnostics?:GrokDiagnostics;protocolTiming?:GrokProtocolTiming;text: string; usage?: Usage; model?: string; requestedModel?: string; responseId?: string; sessionId?: string};
 export interface Adapter { id: ParticipantId; readonly maxTotalTokensPerCall?:number; prepare?(signal: AbortSignal): Promise<void>; dispose?(): Promise<void>; run(prompt: string, round: Round, signal: AbortSignal): Promise<Reply> }
 
 export function composePrompt(s: Session, agent: ParticipantId, round: Round, context: string): string {
@@ -116,12 +120,21 @@ function responseMarkdown(entry:Entry):string[] {
 }
 
 export function makeReport(s: Session, options:{preserveRecordedOutcome?:boolean}={}): string {
+ if(s.workflowMode==='targeted')return [`# Targeted review — ${s.id}`,'',`Status: ${s.status}; calls: ${s.calls}`,
+  '## Task','',reportCell(s.prompt),'','## Supplied context','',reportCell(s.context||'None'),'',
+  '## Acceptance checks','',...(s.targetedConfig?.checks.length?s.targetedConfig.checks.map(c=>'- '+reportCell(c)):['None supplied.']),'',
+  '## Requested participants and models','',...(s.selection?.providers.map(id=>`- ${id}: ${reportCell(s.selection!.models[id]||'SDK default')}`)??[]),'',
+  '## Evidence','',s.evidence?originalMarkdown(JSON.stringify(s.evidence,null,2)):'No external evidence supplied.','',
+  ...(s.targeted?targetedMarkdown(s.targeted):['Assessment unavailable']),...tokenAccountingMarkdown(s.events),...budgetMarkdown(s.budget),
+  '## Failures and stop reasons','',...s.events.filter(e=>['agent.error','discussion.stopped','session.error'].includes(e.type)).map(e=>reportCell(e.error??e.reason)),'',
+  '## Original responses','',...s.entries.flatMap(e=>[`### ${e.stage} — ${e.agent}`,'',originalMarkdown(e.text),''])].join('\n');
  const lines=[`# Multi-agent discussion — ${s.id}`, '', `**Question:** ${s.prompt.replace(/\n/g,' ')}`, `**Status:** ${s.status}  **Calls:** ${s.calls}  **Cost known:** $${s.spendKnownUSD.toFixed(4)}${s.spendIncomplete?' (incomplete metering)':''}`, `**Evidence:** ${s.evidence?.snapshotId || 'none'}  **SHA-256:** ${s.evidence?.hash || 'not available'}`,''];
  const outcome=s.outcome??(options.preserveRecordedOutcome?undefined:assessDiscussion(s));
  if(outcome)lines.push(...outcomeMarkdown(outcome));
  else lines.push('## Final recommendation','','No agreement assessment was recorded for this discussion. Original responses are preserved below; no new assessment was inferred.','');
  lines.push(...workflowMarkdown(s));
  lines.push(...budgetMarkdown(s.budget));
+ lines.push(...tokenAccountingMarkdown(s.events));
  if(s.context)lines.push('## Supplied context','',reportCell(s.context),'');
  if(s.selection) {
   lines.push('## Requested providers and models', '', '| Participant | Requested model |', '|---|---|');

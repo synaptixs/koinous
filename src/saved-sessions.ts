@@ -1,3 +1,5 @@
+import {assessTargeted} from './targeted-review.ts';
+import {researchRequest} from './research.ts';
 import {PARTICIPANTS} from './participants.ts';
 import type {ParticipantId} from './participants.ts';
 import {validBudgetState} from './budgets.ts';
@@ -48,6 +50,7 @@ export class SavedSessions {
   requireValue(events.every((e,i)=>e&&typeof e==='object'&&e.seq===i+1&&typeof e.type==='string'&&typeof e.at==='string'&&Number.isFinite(Date.parse(e.at))));
   const first=events[0],last=events.at(-1)!;
   requireValue(first.type==='session.created'&&typeof first.prompt==='string'&&first.prompt.length<=6000);
+  requireValue(first.workflowMode===undefined||first.workflowMode==='discussion'||first.workflowMode==='targeted');
   requireValue(last.type==='session.finished'&&typeof last.status==='string'&&TERMINAL.has(last.status)&&Number.isInteger(last.calls)&&Number(last.calls)>=0&&Number(last.calls)<=9);
   requireValue(first.maxRounds===1||first.maxRounds===2||first.maxRounds===3);
   if(last.budget!==undefined)requireValue(validBudgetState(last.budget));
@@ -71,13 +74,31 @@ export class SavedSessions {
   requireValue(entries.length<=Number(last.calls));
   const grounding=events.find(e=>e.type==='grounding.pinned');
   // Preserve recorded outcomes and reports. Do not reassess old runs with newer algorithms.
-  return {id,budget:last.budget as Session['budget'],prompt:first.prompt as string,context:typeof first.context==='string'?first.context:'',grounding:grounding?'configured':'none',
+  const restored:Session={id,workflowMode:first.workflowMode==='targeted'?'targeted':'discussion',research:first.workflowMode==='targeted'?researchRequest(first.research):undefined,targetedConfig:first.targetedConfig as Session['targetedConfig'],budget:last.budget as Session['budget'],prompt:first.prompt as string,context:typeof first.context==='string'?first.context:'',grounding:grounding?'configured':'none',
    maxRounds:first.maxRounds as number,status:last.status as string,calls:Number(last.calls),
    spendKnownUSD:typeof last.spendKnownUSD==='number'?last.spendKnownUSD:0,spendIncomplete:last.spendIncomplete!==false,
    participants:configured?.agents as Session['participants'],selection:configured?.selection as Session['selection'],
    events,entries:entries as unknown as Session['entries'],interventions:[],cancel:new AbortController(),
    outcome:assessed?.outcome as Session['outcome'],report:this.read(join(path,'report.md'),2*1024*1024),
    ...(grounding?{evidence:{snapshotId:String(grounding.snapshotId),hash:String(grounding.sha256),items:[],source:'file' as const}}:{})};
+  if(restored.workflowMode==='targeted'){
+   const snapshots=events.filter(e=>e.type==='evidence.snapshot');requireValue(snapshots.length<=1);
+   if(snapshots.length){
+    const e=snapshots[0].evidence as Session['evidence'];
+    requireValue(e&&typeof e.snapshotId==='string'&&typeof e.hash==='string'&&['file','mcp','web'].includes(e.source)&&Array.isArray(e.items)&&e.items.every(i=>i&&typeof i.id==='string'&&typeof i.uri==='string'&&typeof i.text==='string'));
+    restored.evidence=e;
+   }
+   const c=restored.targetedConfig,roster=restored.selection?.providers;
+   requireValue(c&&roster?.length===2&&!roster.includes('grok')&&roster.includes(c.author)&&roster.includes(c.reviewer)&&c.author!==c.reviewer&&Array.isArray(c.checks)&&c.checks.length<=6&&c.checks.every(x=>typeof x==='string'&&!!x.trim()&&x.length<=300));
+   requireValue(restored.calls<=3&&restored.maxRounds===3);
+   const attempts=events.filter(e=>e.type==='agent.started');
+   requireValue(attempts.length===restored.calls&&attempts.every((e,i)=>e.round===i+1&&e.agent===(i===1?c.reviewer:c.author)&&e.stage===['draft','review','revision'][i]));
+   requireValue(entries.every(e=>e.agent===(e.round===2?c.reviewer:c.author)&&e.stage===['draft','review','revision'][Number(e.round)-1]));
+   const recorded=events.find(e=>e.type==='targeted.assessed')?.targeted;
+   const canonical=assessTargeted(restored);requireValue(JSON.stringify(recorded)===JSON.stringify(canonical));restored.targeted=canonical;
+   if(restored.status==='completed')requireValue(canonical.complete);
+  }
+  return restored;
  }
  load(id:string):Session|undefined {
   if(!SESSION_ID.test(id))return;

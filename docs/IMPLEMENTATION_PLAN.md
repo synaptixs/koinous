@@ -29,6 +29,65 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Targeted review iteration — 2026-11-04 (offline)
+
+New UI default: one author draft, one targeted review, conditional author revision.
+Two calls when no material actionable finding exists; at most three.
+
+| Targeted iteration phase | Weight | Offline gate | State |
+|---|---:|---|---|
+| Review contract | 25% | Bounded schemas, references, consequential-finding gate | Passed |
+| Implement flow | 25% | Fresh draft/review/revision; UI/export and saved compatibility | Passed |
+| Verify offline | 25% | TypeScript, 569 Node tests, 33 Python tests; mock browser check | Passed |
+| Document | 25% | README/demo instructions, design record and limitations | Passed |
+
+This scoped offline iteration is 100%; overall/P6 gates do not move. No model
+calls or authentication were performed. Browser mock verification covered the
+no-finding/two-call path and read-only reopening; scripted offline tests cover
+material findings, one revision, rejected/unresolved findings, invalid responses,
+failures, cancellation, budgets, cleanup, provider effort and accounting. Final
+gate log: `/private/tmp/koinous-targeted-pr-check.log`.
+
+Full discussion and historical records remain available. Fresh per-stage adapters and minimal
+text-only context avoid replaying full SDK history and explicit prior messages.
+Canonical strict schemas own finding references, material gating, author responses,
+actual changed fields and provisional outcomes. Primary/helper/unclassified token
+accounting is shared by UI and Markdown/JSON exports; unknown remains unknown.
+
+Review corrections (offline): known totals retain partial failed-call counters;
+new targeted sessions persist the exact evidence snapshot and research request for
+reopening and self-contained exports; response prompts state complete size caps;
+nested revised drafts share the draft cap; a budget below two calls refuses before
+dispatch. Markdown also surfaces final risks and claims. Five new regressions first
+failed on the pending implementation, then passed; an additional configured-source
+mutation test proves reopening does not reread changed evidence. Final gate:
+TypeScript, 569 Node tests and 33 Python tests passed, inference disabled.
+
+Fix impact measured on immutable pending-source snapshot d79a8b2: runTargeted1
+caller, targetedPrompt3, targetedMarkdown1, tokenAccounting10, parseDraft2,
+Engine.create39, createApplication15, SavedSessions.restore2, UI openSaved2.
+No truncation; untraced TypeScript/JavaScript calls are not tracked. These are
+floors. Regression gaps still flag server/demo/start-real/evaluate/secure-server
+entry paths; API/UI regressions and the full offline gate cover changed behavior.
+
+The observed Sonnet/Astra pairing and six-call protocol did not improve the example
+enough to justify their cost; this is not a conclusion about Koinous generally.
+This iteration changes the collaboration protocol. Quality and token savings need
+separate authorized live validation; no calls, authentication or live benchmarks
+are authorized for this implementation. P6 empirical acceptance remains outstanding.
+
+Pre-edit PKG at main 0eb4ba3: Engine.create 36 callers/1 doc; run31/2;
+intervene1/0; createApplication12/2; makeReport20/2; createAdapters14/0;
+CodexAdapter.run7/1; ClaudeAdapter.run2/1; MockAdapter.run1/3;
+SavedSessions.restore2/1; UI refresh9/1, appendResponse2/1, openSaved2/1.
+Additional base-tree measurements: createProtectedApplication6/1;
+Engine constructor0/0; Codex/Claude constructors0/1 each, classes7/1 and2/1.
+No truncation; TypeScript/JavaScript untraced calls are not tracked. Counts are
+floors. Gaps flag server/secure-server, demo/start-real/evaluate and UI entry paths;
+new API/UI/adapter regressions and the full gate cover the relevant paths. The
+remaining work plan and raw measurements are outside the checkout under notes.
+
+
 Current task: requested-model preflight (review, implement, verify, document; equal
 25% each). Review, implementation, verification and documentation passed (4/4).
 Offline gate: TypeScript, 531 Node tests and 33 Python tests passed. Fake SDK

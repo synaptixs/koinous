@@ -14,8 +14,8 @@ class Element {
   replaceChildren(){this.children=[];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={}) {
-  const elements=Object.fromEntries(['researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
-  elements.rounds.value='3';elements.question.value='Synthetic question';
+  const elements=Object.fromEntries(['stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
   const streams:FakeEvents[]=[];
   class FakeEvents {
@@ -289,6 +289,22 @@ test('decision brief presents attributed alternatives and peer responses in live
  const saved={id:'saved-id',prompt:'Saved brief',maxRounds:3,status:'completed',readOnly:true,calls:6,spendKnownUSD:0,spendIncomplete:true,entries:[{agent:'codex',round:3,text:raw}],outcome};
  const reopened=await setup(false,false,saved);reopened.elements.savedSessions.value='saved-id';await reopened.elements.openSaved.onclick!();
  assert.equal(reopened.elements.outcome.textContent,text);assert.ok(reopened.elements.feed.textContent.includes(raw));assert.ok(reopened.elements.feed.textContent.includes(comparison.switchCondition));assert.equal(reopened.streams.length,0);assert.equal(reopened.requests.length,0);
+});
+test('targeted UI chooses roles and preset, limits calls, locks inputs and renders the recorded accounting',async()=>{
+ const ui=await setup();const e=ui.elements;
+ await e.usePair.onclick!();e.acceptanceChecks.value='No stale cache hits\nSame immutable snapshot';
+ assert.equal(e.workflowMode.value,'targeted');assert.equal(e.author.value,'claude');assert.equal(e.plannedCalls.textContent,3);assert.equal(e.rounds.disabled,true);
+ await e.run.onclick!();const req=ui.requests[0];assert.equal(req.workflowMode,'targeted');assert.equal(req.author,'claude');assert.deepEqual(req.checks,['No stale cache hits','Same immutable snapshot']);assert.equal(req.selection.models.claude,'claude-sonnet-5-5');assert.equal(req.selection.models.codex,'gpt-6-astra');assert.equal(e.send.disabled,true);assert.equal(e.workflowMode.disabled,true);
+ const targeted={author:'claude',reviewer:'codex',complete:true,revision:'not-needed',reason:'No material actionable finding; original draft retained.',draft:{recommendation:'Keep <script> literal'},final:{recommendation:'Keep <script> literal',rationale:'Assumption: inputs are stable.',risks:[],nextSteps:['Test variants.']},review:{summary:'Fine',findings:[]},responses:[],changedFields:[]};
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'targeted.assessed',targeted})});assert.match(e.outcome.textContent,/original draft retained/);assert.match(e.outcome.textContent,/not proof of correctness/);
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',spendKnownUSD:0,spendIncomplete:true,tokenAccounting:{knownTotalTokens:390,missingCalls:1,scope:'Reported totals only.',calls:[{agent:'claude',stage:'draft',totalTokens:130,primaryTokens:105,auxiliaryTokens:25,unclassifiedTokens:0},{agent:'codex',stage:'review',totalTokens:null,primaryTokens:null,auxiliaryTokens:null,unclassifiedTokens:null}]}})});
+ assert.match(e.tokenTotals.textContent,/390 known total tokens/);assert.match(e.tokenTotals.textContent,/1 calls missing/);assert.match(e.tokenDetails.textContent,/Helpers/);assert.match(e.tokenDetails.textContent,/unknown/);assert.match(e.jsonReport.href,/format=json/);assert.equal(e.jsonReport.style.display,'inline');
+});
+test('saved targeted view restores changes, unresolved findings and identical accounting without inference',async()=>{
+ const targeted={author:'claude',reviewer:'codex',complete:true,revision:'completed',reason:'Declared changes.',draft:{recommendation:'Old'},final:{recommendation:'New',rationale:'Why',risks:[],nextSteps:['Test']},review:{summary:'Issue',findings:[{id:'f1',claimId:'c1',severity:'material',category:'correctness',failureScenario:'Dirty edits collide',consequence:'Stale result',correction:'Hash contents',acceptanceTest:'Compare variants'}]},responses:[{findingId:'f1',decision:'unresolved',reason:'Unknown dependency',change:'Safer fallback'}],changedFields:['recommendation']};
+ const saved={id:'saved-id',prompt:'Saved',workflowMode:'targeted',research:{mode:'wikipedia',query:'Saved public topic'},targetedConfig:{author:'claude',reviewer:'codex',checks:['Correct outputs']},targeted,maxRounds:3,status:'completed',readOnly:true,calls:3,spendKnownUSD:0,spendIncomplete:true,entries:[],tokenAccounting:{knownTotalTokens:300,missingCalls:0,scope:'No double-counting',calls:[]}};
+ const ui=await setup(false,false,saved,true);ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();assert.equal(ui.elements.workflowMode.value,'targeted');assert.equal(ui.elements.acceptanceChecks.value,'Correct outputs');assert.match(ui.elements.outcome.textContent,/f1 — unresolved/);assert.match(ui.elements.outcome.textContent,/Changed fields: recommendation/);assert.match(ui.elements.tokenTotals.textContent,/300/);assert.equal(ui.requests.length,0);assert.equal(ui.streams.length,0);
+ assert.equal(ui.elements.researchMode.value,'wikipedia');assert.equal(ui.elements.researchQuery.value,'Saved public topic');
 });
 test('decision brief legacy absence and malformed comparison stay explicit in the UI',async()=>{
  const legacy={direction:'pilot',recommendation:'Pilot.',rationale:'Measure.',risks:[],disagreements:[],nextSteps:['Test.']};
