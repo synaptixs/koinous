@@ -35,6 +35,15 @@ test('health reports optional research availability and enterprise account eligi
  const before=process.env.BRAVE_SEARCH_API_KEY;process.env.BRAVE_SEARCH_API_KEY='synthetic-search-secret';t.after(()=>{if(before===undefined)delete process.env.BRAVE_SEARCH_API_KEY;else process.env.BRAVE_SEARCH_API_KEY=before;});
  const {request,app,invocations}=setup(t);const health=await request('/api/health');assert.equal(health.json().research.web,true);assert.deepEqual(health.json().providerAccountTypes,['personal','enterprise']);assert.equal(health.json().workspaceVerified,false);assert.doesNotMatch(health.text,/synthetic-search-secret/);assert.equal(invocations.length,0);assert.equal(app.engine.sessions.size,0);
 });
+test('UI serves current synqo branding and prevents stale HTML and script caching',async t=>{
+ const {request,app,invocations}=setup(t);
+ const page=await request('/');assert.equal(page.status,200);assert.equal(page.headers['Cache-Control'],'no-store');
+ assert.match(page.text,/<title>synqo · Collaborative research<\/title>/);
+ assert.match(page.text,/<h1>synqo · Collaborative research<\/h1>/);
+ assert.doesNotMatch(page.text,/Shared inquiry|Better ideas together/i);
+ const script=await request('/app.js');assert.equal(script.status,200);assert.equal(script.headers['Cache-Control'],'no-store');
+ assert.equal(app.engine.sessions.size,0);assert.equal(invocations.length,0);
+});
 test('API exposes defaults and script; concurrent discussions retain independent rosters/models, events and reports',async t=>{
  const {request,finished,invocations,outputDir}=setup(t);
  const health=(await request('/api/health')).json();assert.equal(health.availableProviders.length,5);assert.deepEqual(health.agents,['codex','claude']);assert.equal(health.availableProviders[0].defaultModel,'default-codex');

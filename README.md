@@ -1,4 +1,4 @@
-# synqo · Better ideas together
+# synqo · Collaborative research
 
 **Discuss an idea with multiple models, compare their reasoning, and keep the disagreements visible.**
 
@@ -27,7 +27,10 @@ git clone https://github.com/synaptixs/koinous.git
 cd koinous
 ```
 
-Already cloned? Open a terminal in the project folder. Choose either mode below.
+Already cloned? Stop the running server with **Ctrl+C**, open a terminal in that
+same project folder, and update it with `git pull --ff-only`. Restart using either
+mode below, then reload the browser. The server loads its UI when it starts;
+updating a different checkout or refreshing an old server will not update the page.
 
 ### 2. Run the demo — no credentials needed
 

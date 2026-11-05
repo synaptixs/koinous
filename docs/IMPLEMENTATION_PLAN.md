@@ -29,6 +29,36 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Collaborative research branding — 2026-11-05 (offline)
+
+The user selected research/collaboration wording. Browser title, visible heading
+and current README/reference headings now use **synqo · Collaborative research**.
+The provider placeholder no longer says shared inquiry. Stable repository, package,
+configuration and saved-session identifiers remain unchanged.
+
+The reported old title was reproduced on port 3030: its process used the older
+`/Users/falcon/projects/koinous` checkout at aa94689 (PR #13), rather than the
+updated development checkout at 02352b0. UI assets are loaded at server startup.
+The README now explains updating the actual serving checkout and restarting it;
+HTML and app.js responses use `Cache-Control: no-store` to prevent stale browser
+assets after restart. Existing CSP and protected-route authentication are preserved.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Reproduce old title, identify checkout, measure PKG impact | Passed |
+| Implement | 25% | Current branding and HTML/JS cache headers | Passed |
+| Verify | 25% | TypeScript, 611 Node tests + 33 Python tests; browser preview | Passed |
+| Document | 25% | Update/restart instructions and design record | Passed |
+
+Measured pre-edit on clean 02352b0: createApplication has 19 bound callers and two
+matching docs. No truncation; untraced TS/JS calls are not tracked, so callers are
+a floor. Regression gaps identify server/demo/start-real/secure-server entry paths.
+The API regression verifies the served title, heading, cache headers and zero model
+invocations; the complete offline gate passes. The isolated mock browser confirms
+the new title and heading. No model, login or live research calls were made. The
+user's existing real-mode server was inspected read-only and was not interrupted.
+Overall 48.33% and P6 80% remain unchanged.
+
 ### Optional web/Wikipedia research and account wording — 2026-11-05 (offline)
 
 The user selected Brave Search API for optional web research. The UI offers None
