@@ -6,7 +6,7 @@ synqo (formerly Koinous) is a local-first application for a bounded discussion b
 model participants. Start with an idea, optionally add context, then review an
 attributed recommendation, alternatives, risks, and next steps.
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Decision brief](#decision-brief) · [Run live](#3-run-live--use-your-subscriptions) · [Documentation](#documentation)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Decision brief](#decision-brief) · [Run live](#3-run-live--personal-or-enterprise-accounts) · [Documentation](#documentation)
 
 > **Prototype status:** the mock workflow and offline checks pass. Bounded live
 > discussions have been exercised, but they do not establish general reliability,
@@ -38,7 +38,7 @@ npm run demo
 Open **http://127.0.0.1:3030** or the sample URL printed in the terminal.
 
 1. Open the bundled synthetic discussion, or enter your own idea.
-2. Keep research set to **Use idea and supplied context** for an offline demo.
+2. Keep research set to **None — use idea and supplied context** for an offline demo.
 3. Choose **Draft + targeted review**, choose the author, and select **Start discussion**.
 4. Read the decision briefs and expand the original responses when needed.
 
@@ -47,46 +47,48 @@ login, API key, or VM, and does not load `.env`. Stop it with **Ctrl+C**.
 
 For troubleshooting and the full walkthrough, see [DEMO.md](DEMO.md).
 
-### 3. Run live — use your subscriptions
+<a id="3-run-live--use-your-subscriptions"></a>
 
-Live discussions use your subscriptions and consume their usage allowance. Confirm
+### 3. Run live — personal or enterprise accounts
+
+Live discussions use your provider accounts and consume their usage allowance. Confirm
 the intended account and model availability before starting a discussion.
 
 Choose **one** command from the project folder. Stop an existing demo with
 **Ctrl+C** before starting live mode.
 
-**ChatGPT/Codex + Claude subscriptions:**
+**ChatGPT/Codex + Claude accounts — personal or enterprise:**
 
 ```sh
 npm run demo:live
 ```
 
-**ChatGPT/Codex subscription only — two OpenAI models:**
+**ChatGPT/Codex account only — two OpenAI models:**
 
 ```sh
 npm run demo:live -- --openai-only
 ```
 
 The launcher installs pinned dependencies using `npm ci` (internet required),
-checks subscription login, and opens missing provider sign-in flows when needed.
+checks provider account login, and opens missing provider sign-in flows when needed.
 
 1. Complete any browser sign-in with the intended account.
 2. Open the localhost URL printed in the terminal.
-3. Select models available to your subscriptions. In OpenAI-only mode, enter
+3. Select models available to your accounts. In OpenAI-only mode, enter
    **two different model IDs**, one for each participant.
 4. Enter your idea and optional context. Keep **Draft + targeted review**; choose
    the author or use the **Sonnet 5.5 + Astra** preset, then select **Start discussion**.
 5. Review the findings, recorded changes, token accounting and downloadable reports.
 
 Setup sends no model prompts; **Start discussion** sends prompts and uses your
-subscription allowance. Grok stays off in both launchers. Stop with **Ctrl+C**.
+account allowance. Grok stays off in both launchers. Stop with **Ctrl+C**.
 
-- Authentication uses subscriptions, with **no API-key fallback**.
+- Sign in with a **personal or enterprise OpenAI/Claude account**, including provider-managed SSO when required; model API-key fallback remains disabled.
 - Login status does not establish model entitlement, remaining quota, or corporate workspace selection.
 - Different requested model IDs can be aliases; distinct underlying models are not guaranteed.
 - Missing cost information stays **unknown**, rather than being treated as zero or an invoice.
 
-Follow [the live setup guide](DEMO.md#use-your-own-subscriptions-for-real-discussions)
+Follow [the live setup guide](DEMO.md#personal-or-enterprise-accounts-for-real-discussions)
 for account setup and manual controls. Advanced Grok runtime instructions are in the
 [engineering reference](REFERENCE.md#grok-build-subscription-adapter-inference-requires-explicit-opt-in).
 
@@ -123,6 +125,27 @@ before a chat. Ollama uses **model default effort**, which may differ across mod
 Token counts and latency appear in the existing UI and exports; missing usage and
 USD remain unknown. No Ollama live acceptance run has been performed.
 See [Ollama setup and troubleshooting](DEMO.md#ollama-cloud--local).
+
+### Optional research: Wikipedia, web search, or both
+
+Research is **off by default**. In the Research selector choose **None**,
+**Wikipedia**, **Web search**, or **Wikipedia + web search**. Enter a separate
+public query; only that query is sent to the selected services, not your private
+idea or context. All participants receive the same recorded source snapshot.
+
+Wikipedia retrieves up to five English article introductions. Web search uses
+[Brave Search API](https://api-dashboard.search.brave.com/app/documentation/web-search/get-started)
+and retrieves up to five result snippets; it does not open the full pages.
+Coverage, retained/omitted results and partial excerpts are recorded. Retrieval
+is not fact checking. If a selected service fails, the session stops before model
+calls rather than silently continuing with fewer sources.
+
+For web search, the server operator supplies `BRAVE_SEARCH_API_KEY` in the server
+process environment before starting synqo. With no key configured, web choices
+are unavailable; Wikipedia and no-research discussions still work. The key never
+appears in the browser or model SDK environment. It authenticates the separate
+search service, not a model provider; its usage/charges are separate from the
+model token accounting. See [research setup](DEMO.md#optional-research).
 
 ## How it works
 
@@ -205,10 +228,11 @@ field limits, and saved-session compatibility.
 | **Decision briefs** | Implemented in PR #11; parser, UI, exports, compatibility, and mock browser checks passed |
 | **Evaluation and operations** | Harness and offline gates passed; development evidence is incomplete and Grok review is provisional product feedback |
 | **Empirical acceptance** | Heldout and independent human-review gates remain incomplete; no superiority claim |
-| **Corporate OpenAI use** | Workspace and entitlement acceptance remain unverified; personal-account evidence does not establish corporate readiness |
+| **Personal/enterprise provider accounts** | Browser account login and provider-managed SSO wording supported; selected corporate workspace, organization entitlement and quota are not verified by login status |
+| **Optional research** | None by default; Wikipedia, Brave web-search snippets, or both; shared recorded evidence and no implicit fallback |
 | **PKG and enterprise work** | Deferred; neither is required for the ordinary idea-discussion workflow |
 
-The latest decision-brief gate passed **TypeScript, 540 Node tests, and 33 Python
+The latest offline gate passed **TypeScript, 610 Node tests, and 33 Python
 tests**. These checks validate software behavior; they do not establish answer quality.
 The original roadmap remains **48.33%**, with **P6 at 80%**. Those figures describe
 its broader acceptance gates, not the usability of every shipped feature.
@@ -231,7 +255,7 @@ See [OPERATIONS.md](OPERATIONS.md) for environment requirements and stop/recover
 
 | If you want to… | Read |
 |---|---|
-| Run the mock demo or connect subscriptions | [Demo and setup guide](DEMO.md) |
+| Run the mock demo or connect personal/enterprise accounts | [Demo and setup guide](DEMO.md) |
 | Operate, verify, or recover a run | [Operations](OPERATIONS.md) |
 | Understand the benchmark and its acceptance limits | [Evaluation protocol](evaluation/PROTOCOL.md) |
 | Follow the full roadmap and design history | [Implementation plan](docs/IMPLEMENTATION_PLAN.md) |

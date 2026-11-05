@@ -74,20 +74,22 @@ export class SavedSessions {
   requireValue(entries.length<=Number(last.calls));
   const grounding=events.find(e=>e.type==='grounding.pinned');
   // Preserve recorded outcomes and reports. Do not reassess old runs with newer algorithms.
-  const restored:Session={id,workflowMode:first.workflowMode==='targeted'?'targeted':'discussion',research:first.workflowMode==='targeted'?researchRequest(first.research):undefined,targetedConfig:first.targetedConfig as Session['targetedConfig'],budget:last.budget as Session['budget'],prompt:first.prompt as string,context:typeof first.context==='string'?first.context:'',grounding:grounding?'configured':'none',
+  const restored:Session={id,workflowMode:first.workflowMode==='targeted'?'targeted':'discussion',research:researchRequest(first.research),targetedConfig:first.targetedConfig as Session['targetedConfig'],budget:last.budget as Session['budget'],prompt:first.prompt as string,context:typeof first.context==='string'?first.context:'',grounding:grounding?'configured':'none',
    maxRounds:first.maxRounds as number,status:last.status as string,calls:Number(last.calls),
    spendKnownUSD:typeof last.spendKnownUSD==='number'?last.spendKnownUSD:0,spendIncomplete:last.spendIncomplete!==false,
    participants:configured?.agents as Session['participants'],selection:configured?.selection as Session['selection'],
    events,entries:entries as unknown as Session['entries'],interventions:[],cancel:new AbortController(),
    outcome:assessed?.outcome as Session['outcome'],report:this.read(join(path,'report.md'),2*1024*1024),
    ...(grounding?{evidence:{snapshotId:String(grounding.snapshotId),hash:String(grounding.sha256),items:[],source:'file' as const}}:{})};
-  if(restored.workflowMode==='targeted'){
+  {
    const snapshots=events.filter(e=>e.type==='evidence.snapshot');requireValue(snapshots.length<=1);
    if(snapshots.length){
     const e=snapshots[0].evidence as Session['evidence'];
     requireValue(e&&typeof e.snapshotId==='string'&&typeof e.hash==='string'&&['file','mcp','web'].includes(e.source)&&Array.isArray(e.items)&&e.items.every(i=>i&&typeof i.id==='string'&&typeof i.uri==='string'&&typeof i.text==='string'));
     restored.evidence=e;
    }
+  }
+  if(restored.workflowMode==='targeted'){
    const c=restored.targetedConfig,roster=restored.selection?.providers;
    requireValue(c&&roster?.length===2&&!roster.includes('grok')&&roster.includes(c.author)&&roster.includes(c.reviewer)&&c.author!==c.reviewer&&Array.isArray(c.checks)&&c.checks.length<=6&&c.checks.every(x=>typeof x==='string'&&!!x.trim()&&x.length<=300));
    requireValue(restored.calls<=3&&restored.maxRounds===3);

@@ -16,7 +16,7 @@ class Element {
   replaceChildren(){this.children=[];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>) {
-  const elements=Object.fromEntries(['ollamaGroup','ollamaChoices','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  const elements=Object.fromEntries(['researchStatus','ollamaGroup','ollamaChoices','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.ollamaGroup.hidden=true;elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
   const streams:FakeEvents[]=[];
@@ -54,6 +54,26 @@ test('Ollama UI explicitly refreshes metadata, selects models and records defaul
 test('Ollama UI reports metadata errors while inference stays disabled',async()=>{
  const f=await setup(false,false,undefined,true,undefined,undefined,ollamaHealth,async()=>({ok:false,json:async()=>({error:'Start Ollama and refresh.'})}));
  const card=f.elements.ollamaChoices.children[0];await card.children[5].onclick!();assert.equal(card.children[6].textContent,'Start Ollama and refresh.');assert.equal(f.elements.run.disabled,true);assert.equal(f.requests.length,0);
+});
+for(const mode of ['wikipedia','web','both'])test(`research ${mode} is sent only after explicit selection with its public query`,async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{research:{web:true}});
+ ui.elements.researchMode.value=mode;ui.elements.researchMode.onchange!();ui.elements.researchQuery.value='public topic only';ui.elements.context.value='private context';await ui.elements.run.onclick!();
+ assert.deepEqual(ui.requests[0].research,{mode,query:'public topic only'});assert.equal(ui.elements.researchMode.disabled,true);
+});
+test('research is absent by default; unconfigured web is refused and Wikipedia stays available',async()=>{
+ const plain=await setup();await plain.elements.run.onclick!();assert.equal(Object.hasOwn(plain.requests[0],'research'),false);
+ const ui=await setup();ui.elements.researchMode.value='both';ui.elements.researchMode.onchange!();assert.equal(ui.elements.run.disabled,true);assert.match(ui.elements.researchStatus.textContent,/not configured/);await ui.elements.run.onclick!();assert.equal(ui.requests.length,0);
+ ui.elements.researchMode.value='wikipedia';ui.elements.researchMode.onchange!();ui.elements.researchQuery.value='public';assert.equal(ui.elements.run.disabled,false);
+});
+test('research coverage labels mixed sources and personal/enterprise login without inferring workspace verification',async()=>{
+ const real=await setup(false,false,undefined,true);assert.match(real.elements.providers.textContent,/personal or enterprise account login/);
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{research:{web:true}});await ui.elements.run.onclick!();
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'research.completed',mode:'both',providers:['Wikipedia','Brave Search'],scope:'Article introductions and search snippets; full pages not fetched.',coverage:[{source:'web',returned:2,received:4,resultsOmitted:2}],sources:[{id:'web-1',uri:'https://example.org',text:'snippet'}]})});
+ assert.match(ui.elements.evidence.textContent,/Wikipedia \+ Brave Search/);assert.match(ui.elements.feed.textContent,/2 of 4 returned candidates/);assert.match(ui.elements.feed.textContent,/full pages not fetched/);
+});
+test('saved both-source research selection reopens without research or model requests',async()=>{
+ const saved={id:'saved-id',prompt:'Saved task',status:'completed',readOnly:true,maxRounds:1,calls:2,spendKnownUSD:0,spendIncomplete:true,research:{mode:'both',query:'saved public query'},selection:{providers:['codex','claude'],models:{}},entries:[]};
+ const ui=await setup(false,false,saved,true);ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();assert.equal(ui.elements.researchMode.value,'both');assert.equal(ui.elements.researchQuery.value,'saved public query');assert.equal(ui.requests.length,0);assert.equal(ui.elements.run.disabled,true);
 });
 test('Ollama Cloud + Local offers local selection only after installed models are found',async()=>{
  let calls=0;

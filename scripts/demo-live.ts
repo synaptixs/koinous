@@ -5,7 +5,7 @@ import {authCommand,subscriptionReady} from '../src/subscription-setup.ts';
 import type {AuthResult,LoginProvider} from '../src/subscription-setup.ts';
 import {subscriptionEnvironment} from '../src/provider-config.ts';
 
-export type DemoCommand={file:string;args:string[];capture:boolean;timeoutMs:number};
+export type DemoCommand={file:string;args:string[];capture:boolean;timeoutMs:number;purpose?:'server'};
 export type DemoRunner=(command:DemoCommand,signal:AbortSignal)=>Promise<AuthResult>;
 const root=fileURLToPath(new URL('../',import.meta.url));
 // Shell-free argv supports spaces and Windows npm paths. Never forward ambient API keys.
@@ -13,7 +13,9 @@ export function runDemoCommand(command:DemoCommand,signal:AbortSignal):Promise<A
  signal.throwIfAborted();
  return new Promise((resolveResult,reject)=>{
   const env={...subscriptionEnvironment(),KOINOUS_ENABLE_INFERENCE:'0',GROK_BUILD_ENABLE_INFERENCE:'0',KOINOUS_DISABLED_PROVIDERS:'grok'};
-  // PORT is the only optional launcher setting forwarded to the local server.
+  // Search credentials belong only to the app server, never install/auth children.
+  if(command.purpose==='server'&&process.env.BRAVE_SEARCH_API_KEY)Object.assign(env,{BRAVE_SEARCH_API_KEY:process.env.BRAVE_SEARCH_API_KEY});
+  // PORT is an optional launcher setting.
   if(process.env.PORT)Object.assign(env,{PORT:process.env.PORT});
   const child=spawn(command.file,command.args,{cwd:root,env,shell:false,stdio:command.capture?['ignore','pipe','pipe']:'inherit'});
   let stdout='',stderr='',bytes=0,failed=false;
@@ -30,7 +32,7 @@ export function runDemoCommand(command:DemoCommand,signal:AbortSignal):Promise<A
 }
 export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:AbortSignal;log?:(s:string)=>void;npmPath?:string;nodeVersion?:string}={}){
  const log=options.log??console.log,run=options.run??runDemoCommand,signal=options.signal??new AbortController().signal;
- if(args.length===1&&args[0]==='--help'){log('npm run demo:live — installs pinned dependencies, opens missing subscription login flows, then starts the live UI. No model calls until Start discussion. Ctrl+C stops. Use -- --openai-only for two OpenAI models with one corporate ChatGPT/Codex login (no Claude login). Requires Node 22.16+ and internet.');return;}
+ if(args.length===1&&args[0]==='--help'){log('npm run demo:live — installs pinned dependencies, opens missing personal/enterprise provider login flows, then starts the live UI. No model calls until Start discussion. Ctrl+C stops. Use -- --openai-only for two OpenAI models with one corporate ChatGPT/Codex login (no Claude login). Requires Node 22.16+ and internet.');return;}
  const openaiOnly=args.length===1&&args[0]==='--openai-only';
  if(args.length&&!openaiOnly)throw Error('Use npm run demo:live, -- --openai-only, or -- --help.');
  const [major,minor]=(options.nodeVersion??process.versions.node).split('.').map(Number);
@@ -43,14 +45,14 @@ export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:Ab
  for(const provider of (openaiOnly?['codex']:['codex','claude']) as LoginProvider[]){
   const auth=(action:'login'|'status')=>step({...authCommand(provider,action),capture:action==='status',timeoutMs:action==='status'?15000:300000});
   if(!subscriptionReady(provider,await auth('status'))){
-   log(`Sign in to your own ${provider==='codex'?'ChatGPT':'Claude'} subscription in the provider login flow. No API-key fallback.`);
+   log(`Sign in to your own ${provider==='codex'?'ChatGPT':'Claude'} personal or enterprise account in the provider login flow. No API-key fallback.`);
    if((await auth('login')).code!==0)throw Error(`${provider} login did not complete. Rerun when ready.`);
-   if(!subscriptionReady(provider,await auth('status')))throw Error(`${provider} subscription login not confirmed. Live startup refused.`);
+   if(!subscriptionReady(provider,await auth('status')))throw Error(`${provider} provider account login not confirmed. Live startup refused.`);
   }
-  log(`${provider}: subscription login confirmed.`);
+  log(`${provider}: provider account login confirmed (personal or enterprise; workspace/entitlement not verified).`);
  }
- log('Starting '+(openaiOnly?'OpenAI-only':'Codex/Claude')+' live demo. Open the URL printed below; Start discussion uses your subscription quota. Ctrl+C stops the server.');
- const result=await step({file:process.execPath,args:['--experimental-strip-types','scripts/start-real.ts','--enable-inference',...(openaiOnly?['--openai-only']:[])],capture:false,timeoutMs:0});
+ log('Starting '+(openaiOnly?'OpenAI-only':'Codex/Claude')+' live demo. Open the URL printed below; Start discussion uses your provider account quota. Ctrl+C stops the server.');
+ const result=await step({file:process.execPath,args:['--experimental-strip-types','scripts/start-real.ts','--enable-inference',...(openaiOnly?['--openai-only']:[])],capture:false,timeoutMs:0,purpose:'server'});
  if(result.code!==0)throw Error('Live demo server exited unsuccessfully. Check the message above; no automatic restart.');
 }
 if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.url){

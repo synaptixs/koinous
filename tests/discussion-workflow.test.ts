@@ -21,7 +21,7 @@ const position=(peers:AgentId[])=>({direction:'pilot',recommendation:'Pilot for 
 test('research validates explicit public query and rejects unknown configuration',()=>{
  assert.equal(researchRequest(undefined),undefined);
  assert.ok(Object.isFrozen(researchRequest(research)));
- for(const bad of [{mode:'web',query:'x'},{mode:'wikipedia',query:''},{...research,query:'x'.repeat(301)},{...research,url:'http://localhost'},'x'])assert.throws(()=>researchRequest(bad));
+ for(const bad of [{mode:'unknown',query:'x'},{mode:'wikipedia',query:''},{...research,query:'x'.repeat(301)},{...research,url:'http://localhost'},'x'])assert.throws(()=>researchRequest(bad));
 });
 test('research sends only query to fixed endpoint, bounds sources and hashes shared excerpts deterministically',async()=>{
  let calls=0;

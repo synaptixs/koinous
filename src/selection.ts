@@ -29,7 +29,7 @@ export function resolveSelection(input: unknown, defaults: Selection = {provider
   if (input === undefined) input = {providers: defaults.providers};
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Selection must contain providers and optional models');
   const obj = input as Record<string, unknown>;
-  if (Object.keys(obj).some(key => !['providers', 'models'].includes(key))) throw new Error('Selection accepts only providers and models; authentication is fixed to subscription login');
+  if (Object.keys(obj).some(key => !['providers', 'models'].includes(key))) throw new Error('Selection accepts only providers and models; authentication uses provider account login (personal or enterprise)');
   if (!Array.isArray(obj.providers) || obj.providers.some(id => typeof id !== 'string')) throw new Error('Select at least two distinct participants');
   const providers = validateParticipants(obj.providers);
   const requested = obj.models === undefined ? {} : obj.models;
