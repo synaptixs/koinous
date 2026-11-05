@@ -176,34 +176,150 @@ fieldset{margin:16px 0;min-width:0}
 .ollama-cloud-help p{font-size:12px;line-height:1.7}
 .ollama-setup-commands{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.8 ui-monospace,SFMono-Regular,Consolas,monospace;padding:12px;background:#e7effa;border:1px solid #c0cfe3;border-radius:8px;user-select:all}
 .ollama-setup-links{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;font-size:12px}
-</style></head><body><main><header><h1>synqo · Collaborative research</h1><p id="providers">Models collaborating on ideas and research</p></header>
-<section class="panel"><h2>Saved discussions</h2><p>Review finished discussions without starting providers or enabling inference.</p><label for="savedSearch">Search idea, session ID or status</label><input id="savedSearch" type="search" maxlength="200" placeholder="Search saved discussions"><div class="history-filters"><div><label for="savedProvider">Provider</label><select id="savedProvider"><option value="">All providers</option><option value="codex">OpenAI Codex</option><option value="claude">Anthropic Claude</option><option value="grok">Grok Build</option><option value="ollama-local">Ollama Local</option><option value="ollama-cloud">Ollama Cloud</option></select></div><div><label for="savedModel">Requested model ID (exact)</label><input id="savedModel" maxlength="128" placeholder="Any requested model"></div><div><label for="savedFrom">Created from (UTC)</label><input id="savedFrom" type="date"></div><div><label for="savedTo">Created through (UTC)</label><input id="savedTo" type="date"></div></div><p class="filter-hint">Filters combine with search. Provider and model must belong to the same selection. Dates include the whole UTC day.</p><div class="row"><button id="searchSaved">Search</button><button id="clearSaved" class="secondary">Clear filters</button></div><label for="savedSessions">Discussion</label><select id="savedSessions"><option value="">Select a saved discussion</option></select><div class="row"><button id="openSaved" disabled>Open saved discussion</button><button id="refreshSaved" class="secondary">Refresh list</button></div><div class="row"><button id="previousSaved" class="secondary" disabled>Previous page</button><span id="savedPage">Page 1 of 1</span><button id="nextSaved" class="secondary" disabled>Next page</button></div><p id="savedStatus" role="status" aria-live="polite">Loading saved discussions…</p><p id="reviewNotice" role="status"></p></section>
-<section class="panel discussion-setup">
-  <div class="form-field"><label for="question"><strong>Your idea</strong></label><textarea id="question">Should we pilot a four-day workweek for a small team? Discuss benefits, risks and how to evaluate it.</textarea></div>
-  <div class="form-field"><label for="context"><strong>Optional context</strong></label><textarea id="context" maxlength="6000" placeholder="Goals, constraints, audience, or facts you want the providers to consider"></textarea><small>An idea and supplied context are enough to start. External research is optional.</small></div>
-  <section class="workflow-setup" id="workflowSetup" aria-labelledby="workflowTitle">
-    <h2 id="workflowTitle">How models collaborate</h2>
-    <div class="workflow-controls">
-      <div class="form-field"><label for="workflowMode">Workflow</label><select id="workflowMode"><option value="targeted">Draft + targeted review (2–3 calls)</option><option value="discussion">Full discussion (legacy rounds)</option></select></div>
-      <div class="form-field" id="authorField"><label for="author">Draft author</label><select id="author"></select></div>
-    </div>
-    <p id="roleNote">Two calls by default. Revision runs only for material findings.</p>
-    <ol id="workflowSteps" class="workflow-steps" aria-label="Collaboration flow"></ol>
-    <p id="workflowProgress" class="workflow-progress" role="status" aria-live="polite">Planned flow</p>
-    <div class="workflow-preset"><button id="usePair" class="secondary" type="button">Use Sonnet 5.5 + Astra</button><small>Sonnet drafts; Astra reviews. You can choose another pair below.</small></div>
-    <div class="form-field acceptance-field" id="acceptanceField"><label for="acceptanceChecks"><strong>Acceptance checks</strong> <span class="field-optional">Optional</span></label><small id="acceptanceHint">What must a sound recommendation get right? One check per line, up to six.</small><textarea id="acceptanceChecks" maxlength="1805" aria-describedby="acceptanceHint" placeholder="For example: Define a measurable success criterion.&#10;Include a rollback or stop condition."></textarea></div>
-  </section>
-  <section class="form-field research-setup" aria-labelledby="researchLabel">
-    <label id="researchLabel" for="researchMode"><strong>Research</strong> <span class="field-optional">Optional</span></label>
-    <p id="researchStatus" role="status">Research is off by default.</p>
-    <select id="researchMode"><option value="none">None — use idea and supplied context</option><option value="wikipedia">Wikipedia</option><option value="web">Web search</option><option value="both">Wikipedia + web search</option></select>
-    <input id="researchQuery" maxlength="300" aria-label="Public research keywords" placeholder="Public topic keywords, e.g. four-day workweek">
-    <p class="filter-hint">Optional research sends only these keywords to the selected services: Wikipedia article introductions and/or web-search snippets, up to five results each. Full web pages are not fetched. Avoid private information. Selected-source failure stops before model calls; results are shared with all participants.</p>
-  </section>
-  <fieldset id="selection"><legend>Participants and models</legend><p>Targeted review needs exactly two OpenAI, Claude or Ollama participants. Full discussion supports two or three. Choose a provider and model for each participant. Two models can use the same provider. OpenAI/Claude use personal or enterprise provider accounts, including provider-managed SSO where required; local Ollama needs no login. No API-key fallback.</p><div class="form-field"><label for="participantCount">Number of participants</label><select id="participantCount" aria-describedby="participantCountHint"><option value="2" selected>2</option><option value="3">3 — Full discussion</option></select><small id="participantCountHint" role="status">Default: 2 participants. Choosing 3 uses Full discussion and adds an empty participant row.</small></div><div id="participantChoices" class="choices"></div><button id="addParticipant" class="secondary" type="button">Add participant</button><small>Choose a model for every participant. No model is selected automatically. Two models from the same provider must differ. Catalog entries do not verify account access.</small></fieldset>
-  <p id="selectionError" role="status" aria-live="polite">Loading provider configuration…</p>
-  <div class="row"><label for="rounds">Maximum rounds</label><select id="rounds"><option>3</option><option>2</option><option>1</option></select><button id="run" disabled>Start discussion</button><small>Up to <span id="plannedCalls">—</span> calls</small></div>
+
+/* Configuration workspace: existing runtime and report styles remain above. */
+body{padding:20px;background:radial-gradient(ellipse at 8% 4%,#d7e9ffb3,transparent 45%),radial-gradient(ellipse at 93% 22%,#e9e0f8b3,transparent 42%),#f1f5fa;font-size:14px}
+
+.workspace-shell{max-width:1440px;margin:auto;border:1px solid #ccd8e9;border-radius:18px;overflow:clip;background:#f5f8fdba;box-shadow:0 18px 55px #405c8312}
+
+.workspace-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:#f5f8fc;padding:18px 24px;margin:0;border-bottom:1px solid #d5dfed}
+
+.workspace-brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.workspace-brand h1{font-size:28px;margin:0}
+.workspace-brand span,.workspace-top>p{font-size:12px;color:#5b6f89;margin:0}
+
+.workspace-layout{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:800px;background:#edf3fb}
+.workspace-nav{position:sticky;top:0;align-self:start;height:calc(100vh - 40px);min-height:240px;padding:24px 12px;background:#edf3fb;border-right:1px solid #d4dfed;display:flex;flex-direction:column;gap:8px}
+.nav-button{background:transparent;border:0;box-shadow:none;color:#45617f;text-align:left;font-size:13px;font-weight:500;padding:12px}
+.nav-button.is-current{background:#dfe9fa;color:#29519d}
+.workspace-nav>p{margin-top:auto;padding:20px 8px;font-size:12px;line-height:1.8}
+
+.workspace-main{padding:24px;min-width:0;background:#f5f8fdba}
+#workspaceTitle,#sessionResults,#savedConfiguration{scroll-margin-top:20px}
+.workspace-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 22px;padding:0}
+.workspace-heading h2{font-size:25px;margin:0 0 6px}
+.workspace-heading p{font-size:12px;margin:0}
+.setup-state{font-size:11px;border-radius:20px;padding:5px 10px;background:#e8eef7;color:#536c8c}
+.setup-state.is-ready{background:#e3f2e9;color:#286147}
+
+.workspace-main>.panel,.workspace-main section.panel{padding:18px;border:1px solid #d3deec;border-radius:14px;background:#ffffffde;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.section-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.section-heading h3,.idea-setup>h3{font-size:15px;margin:0}
+.count-field{display:flex;align-items:center;gap:9px;font-size:12px}
+.count-field select{padding:8px;max-width:210px}
+.count-field label{white-space:nowrap}
+.participant-panel #participantCountHint{margin:0 0 12px;font-size:11px}
+.participant-panel .choices{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.participant-choice{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:15px;background:#f7f9fd;border:1px solid #d5e0ef;box-shadow:none;min-width:0}
+.participant-choice h3{grid-column:1;font-size:14px;margin:0 0 5px}
+.participant-role{grid-column:2;background:#e5edf9;color:#355b96;border-radius:6px;padding:3px 7px;font-size:11px;max-width:100%}
+.participant-choice>label,.participant-choice>select,.participant-choice>input,.participant-choice>small,.participant-choice>div,.participant-choice>button{grid-column:1/-1;min-width:0}
+.participant-choice label{font-size:12px;margin:0}
+.participant-choice select{font-size:14px;margin:0;width:100%;padding:9px}
+.participant-choice small{font-size:11px;line-height:1.6;margin:0}
+.participant-choice>div{margin:0}
+.participant-choice>button{margin:0;justify-self:start;font-size:11px;padding:6px 8px;min-height:30px}
+.model-discovery{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:start}
+.model-discovery>label,.model-discovery>small,.model-discovery>details{grid-column:1/-1}
+.model-discovery>select{grid-column:1}
+.model-discovery>button{grid-column:2;font-size:11px;padding:8px 9px;margin:0;white-space:nowrap}
+.model-status.is-error{color:#80551c;padding:9px;background:#fff4df;border:1px solid #e2cda6;border-radius:7px}
+.model-status.is-error::before{content:'Model list unavailable. ';font-weight:600}
+.model-error{grid-column:1/-1;color:#855a23!important}
+.field-error{color:#855a23;min-height:0;font-size:12px;display:block}
+.participant-choice [aria-invalid=true],#researchQuery[aria-invalid=true],#question[aria-invalid=true]{border-color:#b38339}
+
+.workflow-controls{padding-top:16px;margin-top:16px;border-top:1px solid #e0e7f0;grid-template-columns:1.35fr 1fr;gap:14px}
+.workflow-controls label{font-size:12px}
+.workflow-controls select{font-size:14px;padding:9px}
+.catalog-note{font-size:11px;margin:12px 0 0}
+.configuration-bottom{display:grid;grid-template-columns:.95fr 1.35fr;gap:14px;align-items:start}
+.configuration-bottom>.panel{min-height:220px}
+.configuration-bottom .form-field{margin:14px 0 0}
+.configuration-bottom label{font-size:12px;margin-bottom:7px}
+.configuration-bottom select,.configuration-bottom input,.configuration-bottom textarea{font-size:14px;padding:9px}
+.configuration-bottom textarea{min-height:85px;resize:vertical}
+.setup-details{padding-top:12px;margin-top:12px;border-top:1px solid #dce5f1;font-size:12px;line-height:1.7}
+.setup-details>summary{color:#3f608b;cursor:pointer;font-weight:500}
+.setup-details p,.setup-details small{font-size:12px;overflow-wrap:anywhere}
+.setup-details[open]>summary{margin-bottom:12px}
+.idea-setup .setup-details textarea{min-height:85px}
+.field-optional{margin:0;font-size:11px}
+.configuration-bottom .filter-hint{font-size:11px;line-height:1.65}
+.run-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border:1px solid #d0deef;border-radius:12px;padding:14px 16px;background:#f5f9ff;margin-bottom:22px}
+.run-bar p{margin:0;line-height:1.6}
+.run-bar #selectionError{font-size:13px;color:#526984;min-height:0}
+.run-bar #runSummary{font-size:12px;margin-top:4px}
+.run-bar>button{white-space:nowrap}
+.workspace-footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11px;color:#697e99;margin-top:24px}
+.workspace-main .workflow-setup{margin:18px 0}
+.workspace-main .workflow-setup>h2{font-size:18px}
+.workspace-main .layout{grid-template-columns:minmax(0,1fr) 230px}
+.workspace-main #workspaceNotice{padding:12px;border-radius:8px;border:1px solid #c4d8eb;background:#eef6fd;font-size:13px}
+.workspace-main #historyWorkspace h3{margin-top:0}
+.workspace-main #historyWorkspace>input{margin-top:8px}
+.workspace-main .history-filters{grid-template-columns:1fr 1.3fr 1fr 1fr}
+.workspace-main .panel:has(>#savedSearch){margin-top:0}
+
+@media(max-width:1050px){.participant-panel .choices{grid-template-columns:1fr 1fr}
+.model-discovery{grid-template-columns:1fr}
+.model-discovery>button{grid-column:1;justify-self:start}
+.configuration-bottom{grid-template-columns:1fr}
+.workspace-main .history-filters{grid-template-columns:1fr 1fr}
+.workspace-main .layout{grid-template-columns:1fr}
+.workspace-main .side{position:static}
+}
+
+@media(max-width:760px){#workspaceTitle,#sessionResults,#savedConfiguration{scroll-margin-top:80px}body{padding:10px}
+.workspace-layout{grid-template-columns:1fr}
+.workspace-nav{height:auto;min-height:0;z-index:3;flex-direction:row;flex-wrap:wrap;padding:8px;border-right:0;border-bottom:1px solid #d4dfed}
+.workspace-nav>p{display:none}
+.workspace-top{padding:16px}
+.workspace-brand span{display:none}
+.workspace-main{padding:16px}
+.workspace-heading{align-items:start;flex-wrap:wrap}
+.workspace-heading h2{font-size:23px}
+.participant-panel .choices{grid-template-columns:1fr}
+.participant-role{max-width:150px;overflow-wrap:anywhere}
+.workflow-controls{grid-template-columns:1fr}
+.workspace-main .history-filters{grid-template-columns:1fr}
+.workspace-main select,.workspace-main input,.workspace-main textarea{font-size:16px}
+.workspace-main button{min-height:44px}
+.workspace-main .panel{padding:15px}
+.run-bar{padding:14px}
+.run-bar>button{width:100%}
+.workspace-footer{line-height:1.8}
+.workflow-steps{grid-template-columns:1fr}
+.workflow-step:not(:last-child)::after{display:none}
+}
+
+</style></head><body><main class="workspace-shell">
+<header class="workspace-top"><div class="workspace-brand"><h1>synqo</h1><span>Collaborative research</span></div><p id="providers">Loading provider configuration…</p></header>
+<div class="workspace-layout">
+<nav class="workspace-nav" aria-label="Workspace"><button id="navNew" class="nav-button is-current" type="button" aria-pressed="true">＋ New discussion</button><button id="navSaved" class="nav-button" type="button" aria-pressed="false">Saved discussions</button><p>Local workspace<br>Discussions save automatically.</p></nav>
+<div class="workspace-main">
+<header class="workspace-heading"><div><h2 id="workspaceTitle" tabindex="-1">Configure your discussion</h2><p id="workspaceSubtitle">Choose your models and sources, then describe your decision.</p></div><span id="setupState" class="setup-state" role="status">Not started</span></header>
+<p id="workspaceNotice" role="status" aria-live="polite" hidden></p>
+<section id="newWorkspace" aria-label="New discussion">
+<section id="selection" class="panel participant-panel" aria-labelledby="teamTitle">
+<div class="section-heading"><h3 id="teamTitle">Participants and models</h3><div class="count-field"><label for="participantCount">Participants</label><select id="participantCount" aria-describedby="participantCountHint"><option value="2" selected>2</option><option value="3">3 — Full discussion</option></select></div></div>
+<p id="participantCountHint" class="filter-hint">Default: 2 participants.</p>
+<div id="participantChoices" class="choices"></div>
+<div class="workflow-controls"><div class="form-field"><label for="workflowMode">Workflow</label><select id="workflowMode"><option value="targeted">Draft + targeted review (2–3 calls)</option><option value="discussion">Full discussion (legacy rounds)</option></select></div><div class="form-field" id="authorField"><label for="author">Draft author</label><select id="author"></select></div></div>
+<p class="filter-hint catalog-note">Choose a model for every participant. No model is selected automatically. Catalog entries do not verify account access or your enterprise workspace.</p>
 </section>
-<div class="layout"><div class="panel"><h2>Final recommendation</h2><div id="outcome" aria-live="polite">Available after the discussion.</div><h2>Usage accounting</h2><div id="tokenDetails"></div><h2>Discussion transcript</h2><div class="tags" id="stageTags"></div><div class="feed" id="feed" aria-live="polite"><p>Start a session to see the discussion.</p></div></div>
-<aside class="panel side"><h2>Session</h2><p id="saveStatus" role="status" aria-live="polite">Discussions save automatically when finished.</p><div>Status: <span id="status">Idle</span></div><div>Calls: <span id="calls">0</span> / <span id="maxCalls">—</span></div><div id="tokenTotals">Token usage not recorded yet.</div><div>Recorded USD: <span id="cost">$0.00</span></div><div>Evidence: <code id="evidence">—</code></div><hr><label for="intervene"><strong>Human intervention</strong></label><textarea id="intervene" style="min-height:72px" placeholder="A correction or challenge for the next round"></textarea><button id="send" class="secondary" disabled>Add to next round</button><hr><button id="cancel" class="secondary" disabled>Cancel session</button><p><a id="report" href="#" style="display:none">Download Markdown report</a> <a id="jsonReport" href="#" style="display:none">Download JSON</a></p><p class="low">New interventions apply at the next round boundary; no code changes are permitted by design. Mock output is illustrative.</p></aside></div>
-</main><script src="/app.js"></script></body></html>
+<div class="configuration-bottom">
+<section class="panel research-setup" aria-labelledby="researchLabel"><div class="section-heading"><h3 id="researchLabel">Research</h3><span class="field-optional">Optional</span></div><div class="form-field"><label for="researchMode">Sources</label><select id="researchMode"><option value="none">Off — idea and context only</option><option value="wikipedia">Wikipedia</option><option value="web">Web search · Brave</option><option value="both">Wikipedia + Brave</option></select></div><div id="researchQueryField" class="form-field" hidden><label for="researchQuery">Public search keywords</label><input id="researchQuery" maxlength="300" aria-label="Public research keywords" aria-describedby="researchScope researchError" placeholder="Public topic keywords only"><small id="researchScope">Only these keywords go to the selected services; your idea and context are not sent as the search query.</small><small id="researchError" class="field-error" role="status"></small></div><p id="researchStatus" class="filter-hint" role="status">Research is off by default.</p><details class="setup-details"><summary>Research scope and setup</summary><p>Wikipedia returns article introductions; Brave returns search snippets. Up to five results per source; full web pages are not fetched. Source references do not establish truth. Selected-source failure stops before model calls.</p><p>Brave requires BRAVE_SEARCH_API_KEY on the server. <a href="https://api-dashboard.search.brave.com/" target="_blank" rel="noopener noreferrer">Brave Search API setup</a>. Never put a key in the model or search fields.</p></details></section>
+<section class="panel idea-setup"><h3>Your idea</h3><div class="form-field"><label for="question">What would you like to decide?</label><textarea maxlength="6000" id="question" aria-describedby="ideaError" placeholder="Describe the idea or decision…"></textarea><small id="ideaError" class="field-error" role="status"></small></div><details id="contextDetails" class="setup-details"><summary>Context and review criteria · optional</summary><div class="form-field"><label for="context">Goals, facts and constraints</label><textarea id="context" maxlength="6000" placeholder="Context shared with the selected participants"></textarea></div><div class="form-field" id="acceptanceField"><label for="acceptanceChecks">What must the recommendation get right?</label><small>One review check per line, up to six.</small><textarea id="acceptanceChecks" maxlength="1805" placeholder="For example: Include a measurable stop condition."></textarea></div></details></section>
+</div>
+<details id="advancedSettings" class="setup-details panel"><summary>Advanced settings and presets</summary><div class="form-field"><label for="rounds">Maximum rounds · full discussion</label><select id="rounds"><option>3</option><option>2</option><option>1</option></select></div><div class="workflow-preset"><button id="usePair" class="secondary" type="button">Use Sonnet 5.5 + Astra</button><small>Explicit preset: Sonnet drafts; Astra reviews. This replaces your current pair only when clicked.</small></div></details>
+<div class="run-bar"><div><p id="selectionError" role="status" aria-live="polite">Loading provider configuration…</p><p id="runSummary"><span id="runConfigurationSummary">2 participants · research off</span> · up to <span id="plannedCalls">3</span> calls</p></div><button id="run" disabled>Start discussion →</button></div>
+</section>
+<section id="historyWorkspace" class="panel" aria-label="Saved discussions" hidden><h3>Saved discussions</h3><p>Review finished discussions without starting providers or enabling inference.</p><label for="savedSearch">Search idea, session ID or status</label><input id="savedSearch" type="search" maxlength="200" placeholder="Search saved discussions"><details id="historyFilterDetails" class="setup-details"><summary>Filter discussions</summary><div class="history-filters"><div><label for="savedProvider">Provider</label><select id="savedProvider"><option value="">All providers</option><option value="codex">OpenAI Codex</option><option value="claude">Anthropic Claude</option><option value="grok">Grok Build</option><option value="ollama-local">Ollama Local</option><option value="ollama-cloud">Ollama Cloud</option></select></div><div><label for="savedModel">Requested model ID (exact)</label><input id="savedModel" maxlength="128" placeholder="Any requested model"></div><div><label for="savedFrom">Created from (UTC)</label><input id="savedFrom" type="date"></div><div><label for="savedTo">Created through (UTC)</label><input id="savedTo" type="date"></div></div><p class="filter-hint">Filters combine with search. Provider and model belong to the same selection. Dates include the whole UTC day.</p></details><div class="row"><button id="searchSaved">Search</button><button id="clearSaved" class="secondary">Clear filters</button></div><label for="savedSessions">Discussion</label><select id="savedSessions"><option value="">Select a saved discussion</option></select><div class="row"><button id="openSaved" disabled>Open saved discussion</button><button id="refreshSaved" class="secondary">Refresh list</button></div><div class="row"><button id="previousSaved" class="secondary" disabled>Previous page</button><span id="savedPage">Page 1 of 1</span><button id="nextSaved" class="secondary" disabled>Next page</button></div><p id="savedStatus" role="status" aria-live="polite">Loading saved discussions…</p><p id="reviewNotice" role="status"></p></section>
+<section id="sessionResults" aria-label="Discussion and results" tabindex="-1" hidden>
+<section id="savedConfiguration" class="panel" aria-label="Recorded setup" tabindex="-1" hidden></section>
+<section class="workflow-setup" id="workflowSetup" aria-labelledby="workflowTitle"><h2 id="workflowTitle">How models collaborate</h2><p id="roleNote">Two calls by default. Revision runs only for material findings.</p><ol id="workflowSteps" class="workflow-steps" aria-label="Collaboration flow"></ol><p id="workflowProgress" class="workflow-progress" role="status" aria-live="polite">Planned flow</p></section>
+<div class="layout"><div class="panel"><h2>Final recommendation</h2><div id="outcome" aria-live="polite">Available after the discussion.</div><h2>Usage accounting</h2><div id="tokenDetails"></div><h2>Discussion transcript</h2><div class="tags" id="stageTags"></div><div class="feed" id="feed" aria-live="polite"><p>Start a session to see the discussion.</p></div></div><aside class="panel side"><h2>Session</h2><p id="saveStatus" role="status" aria-live="polite">Discussions save automatically when finished.</p><div>Status: <span id="status">Idle</span></div><div>Calls: <span id="calls">0</span> / <span id="maxCalls">—</span></div><div id="tokenTotals">Token usage not recorded yet.</div><div>Recorded USD: <span id="cost">Unknown</span></div><div>Evidence: <code id="evidence">—</code></div><hr><label for="intervene">Human intervention</label><textarea id="intervene" style="min-height:72px" placeholder="A correction or challenge for the next round"></textarea><button id="send" class="secondary" disabled>Add to next round</button><hr><button id="cancel" class="secondary" disabled>Cancel session</button><p><a id="report" href="#" style="display:none">Download Markdown report</a> <a id="jsonReport" href="#" style="display:none">Download JSON</a></p><p class="low">New interventions apply at the next round boundary; no code changes are permitted by design. Mock output is illustrative.</p></aside></div>
+</section>
+<footer class="workspace-footer"><span>Provider-managed personal or enterprise accounts</span><span>Account access and quota remain unverified.</span></footer>
+</div></div></main><script src="/app.js"></script></body></html>

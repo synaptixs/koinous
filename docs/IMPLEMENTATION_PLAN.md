@@ -29,6 +29,73 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Configuration workspace — 2026-11-05 (offline)
+
+Implements the accepted Workspace direction for participants/models, research, idea
+and saved-discussion navigation. New discussion groups provider/model cards with
+explicit roles, followed by Research and Your idea. Context/criteria, cloud
+registration help, presets and full-discussion rounds are expandable. One Start
+summary includes every row, unconfigured choices, research selection and maximum
+calls. The count selector is the sole add/remove control; two remains the default,
+three adds an empty row and selects Full discussion. Models stay blank until an
+explicit choice. Provider defaults still come from the server; no pair is guessed.
+Catalog refresh and provider-owned registration guidance retain their existing
+metadata-only behavior. Inline errors identify missing/invalid/duplicate choices,
+local installation requirements, absent ideas and missing public search queries.
+Research stays off by default; only an explicitly enabled source reveals its
+separate 1–300 character public query. Disabling research preserves that field but
+does not send it. No new engine, provider, API, persistence or export contract.
+
+Saved discussions has separate search, expandable filters and paging. Opening a
+record displays its recorded idea/context/criteria/research, original results,
+accounting and downloads in read-only mode; absent historical participants remain
+explicitly unrecorded. New discussions cannot start from this review view.
+The first saved open preserves the unfinished setup, including blank rows, custom
+IDs, author, criteria and expanded details. Opening more records does not overwrite
+that draft. Returning New restores it and clears old session identity, stream,
+transcript, recommendation, accounting and download links. Drafts live only in the
+open page; reload does not persist unfinished edits. Completed sessions remain on
+disk. Legacy session/filter URLs still restore; view=new/saved is added to applied
+navigation state, without putting draft text into URLs. Restoration errors remain
+visible in history. Navigation locks during execution/history requests. New runs
+and saved opens move keyboard focus/scroll to the relevant results; failures to
+start remain visible and can be cleared with New discussion. Completion still
+refreshes/selects saved history automatically. Current results/flow/export rendering
+is retained; its broader redesign is outside this slice.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Accepted design, compatibility contracts and measured PKG impact | Passed |
+| Implement | 25% | Workspace layout, explicit setup and draft-safe history navigation | Passed |
+| Verify | 25% | TypeScript, 666 Node + 33 Python tests; final-assets desktop/mobile mock checks | Passed |
+| Document | 25% | Guides, design rationale and validation recorded | Passed |
+
+PKG measured pre-edit on clean cb46aa9 (callers/docs): refresh21/1,
+addParticipant4/1, configureParticipant2/1, populateModelPicker4/1,
+showModelChoices2/1, setParticipants3/1, openSaved2/1, restoreSavedView1/1,
+loadSavedList8/1, syncSavedURL5/1, finish3/1; app-module0/1, touches36.
+No truncation; JavaScript untraced calls are not tracked, so counts are floors.
+Regression gaps flag addParticipant, finish, loadSavedList, openSaved,
+setParticipants, restoreSavedView and module callbacks; VM UI tests are not
+linked in the graph. Eight new UI cases cover navigation/no-dispatch, complete
+three-row draft preservation across records, restored targeted dispatch, query
+visibility/validation/privacy, three failure bookmarks and navigation locks/reset.
+Existing tests now check failed-start visibility, count-only identity preservation,
+invalid-model inline help and the correct 9-call ceiling before a third provider
+is configured. Static serving verifies branding/navigation and unique control IDs.
+
+Full offline gate passes. Final-assets browser checks confirm explicit mock catalogs
+without automatic selection, count3/full/empty third row/9-call ceiling, required
+public query, draft restoration and cleared accounting, keyboard flow, sticky
+navigation, and 390px width without page overflow. A two-call mock discussion
+completed, auto-listed and reopened read-only with the same call count and downloads.
+Screenshots are provided outside the checkout in the implementation artifact bundle.
+No real provider metadata, authentication, model or research request ran. Owned
+mock preview and temporary storage were isolated from the user's running server;
+the preview was stopped. Overall48.33% and P6 80% remain unchanged. P6 empirical
+E5 remains open; source-backed briefs/external-system pilot remain unestimated,
+P2 PKG/P5 enterprise remain deferred, and runtime/results redesign is a future slice.
+
 ### Participant count selector — 2026-11-05 (offline)
 
 Number of participants now offers 2 (default) and 3 within the existing server

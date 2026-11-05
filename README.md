@@ -40,10 +40,10 @@ npm run demo
 
 Open **http://127.0.0.1:3030** or the sample URL printed in the terminal.
 
-1. Open the bundled synthetic discussion, or enter your own idea.
-2. Keep research set to **None — use idea and supplied context** for an offline demo.
-3. Choose **Draft + targeted review**, choose the author, and select **Start discussion**.
-4. Read the decision briefs and expand the original responses when needed.
+1. Choose **Saved discussions** to open the bundled synthetic record, or **New discussion** to configure your own.
+2. For a new mock run, click **Load models** in each participant card and explicitly choose a mock model.
+3. Keep Research **Off — idea and context only**, enter your idea, and choose the draft author.
+4. Select **Start discussion**. Review the recommendation and expand original responses when needed.
 
 The demo uses deterministic mock responses. It needs no dependency installation,
 login, API key, or VM, and does not load `.env`. Stop it with **Ctrl+C**.
@@ -80,7 +80,7 @@ checks provider account login, and opens missing provider sign-in flows when nee
 3. In each participant row, click **Load models**, then choose from the **Model**
    dropdown. No model is preselected; starting requires a choice for every row.
    In OpenAI-only mode, choose **two different model IDs**.
-   **Number of participants** defaults to **2**. Choose **3 — Full discussion**
+   **Participants** defaults to **2**. Choose **3 — Full discussion**
    to add an empty third row, then select its provider and model. Choosing **2**
    removes the last row and preserves the first two choices. Targeted review uses
    exactly two participants. Three is unavailable if the server exposes only two slots.
@@ -146,10 +146,27 @@ Token counts and latency appear in the existing UI and exports; missing usage an
 USD remain unknown. No Ollama live acceptance run has been performed.
 See [Ollama setup and troubleshooting](DEMO.md#ollama-cloud--local).
 
+### Configuration workspace
+
+**New discussion** groups participants/models first, followed by Research and Your
+idea. The draft author and reviewer are labeled on the participant cards. Expand
+**Context and review criteria · optional** for constraints and acceptance checks;
+**Advanced settings and presets** holds full-discussion rounds and the explicit
+Sonnet/Astra preset. The Start summary lists every participant, workflow, research
+selection and maximum call count. Missing choices appear beside their controls.
+
+**Saved discussions** has its own search, expandable filters, paging and read-only
+review. Opening a record shows its recorded setup, original responses, accounting
+and downloads. Returning to **New discussion** restores your unfinished setup and
+clears the old results from the new view. That setup draft is held only in the open
+page; reloading does not persist unfinished edits. Finished sessions remain on disk.
+Bookmarks preserve applied history filters and the opened session, never your draft
+idea/context/query. Navigation locks while a discussion or history request is active.
+
 ### Optional research: Wikipedia, web search, or both
 
-Research is **off by default**. In the Research selector choose **None**,
-**Wikipedia**, **Web search**, or **Wikipedia + web search**. Enter a separate
+Research is **off by default**. In the Research **Sources** selector choose **Off — idea and context only**,
+**Wikipedia**, **Web search · Brave**, or **Wikipedia + Brave**. Enter a separate
 public query; only that query is sent to the selected services, not your private
 idea or context. All participants receive the same recorded source snapshot.
 
@@ -233,7 +250,7 @@ and dissent remain visible; similar answers are not silently merged.
 
 Discussions save automatically. When a session finishes, **Saved discussions**
 refreshes and selects it, and the Session panel confirms **saved automatically**.
-Click **Open saved discussion** to review it without another model call. Applied
+Choose **Saved discussions**, then **Open saved discussion** to review it without another model call. Applied
 history filters and page stay intact; if they exclude the finished session, an
 extra **Just finished** option is labeled separately from the matching count.
 Partial, failed and cancelled sessions retain those statuses. If the list cannot
