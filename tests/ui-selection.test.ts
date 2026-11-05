@@ -20,7 +20,7 @@ class Element {
   replaceChildren(...children:Element[]){this.children=[...children];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,fixtureChoices=true) {
-  const elements=Object.fromEntries(['workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  const elements=Object.fromEntries(['saveStatus','workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[],modelRequests:string[]=[];
   const streams:FakeEvents[]=[];
@@ -32,7 +32,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
     if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}],...healthOverride})};
     if(url.startsWith('/api/models?')){modelRequests.push(url);if(modelFetch)return modelFetch(url);const provider=new URLSearchParams(url.split('?')[1]).get('provider');return {ok:true,json:async()=>({provider,models:provider==='codex'?['codex-default','codex-second']:['claude-fixture','claude-second'],labels:{},total:2,truncated:false,source:'test-catalog',availabilityVerified:false,inferencePerformed:false})};}
     if(url.startsWith('/api/sessions?')&&!options){historyRequests.push(url);if(historyFetch)return historyFetch(url);return {ok:true,json:async()=>({sessions:saved?[{id:saved.id,prompt:saved.prompt,status:saved.status,createdAt:'2026-11-01'}]:[],total:saved?1:0,discoveredTotal:saved?1:0,unavailable:0,truncated:false,scanTruncated:false,page:1,pageSize:50,totalPages:1,q:'',hasPrevious:false,hasNext:false})};}
-    if(url==='/api/sessions/saved-id'&&!options)return {ok:true,json:async()=>saved};
+    if(url==='/api/sessions/'+(saved?.id||'saved-id')&&!options)return {ok:true,json:async()=>saved};
     requests.push({url,...JSON.parse(options?.body||'{}')});
     return {ok:!failedPost,json:async()=>failedPost?{error:'Invalid selection'}:{id:'synthetic-session'}};
   };
@@ -283,9 +283,40 @@ test('UI sends only selected models, freezes running controls, handles completio
  assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.provider.disabled&&row.model.disabled));assert.equal(elements.addParticipant.disabled,true);
  await elements.run.onclick!();assert.equal(requests.length,1);
  streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',spendKnownUSD:0.01,spendIncomplete:true})});
- assert.equal(elements.run.disabled,false);assert.match(elements.cost.textContent,/unknown costs/);assert.equal(streams[0].closed,true);
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(elements.run.disabled,false);assert.match(elements.cost.textContent,/unknown costs/);assert.equal(streams[0].closed,true);
  await elements.addParticipant.onclick!();ui.rows[2].provider.value='grok';ui.rows[2].provider.onchange!();assert.equal(elements.plannedCalls.textContent,9);assert.equal(elements.maxCalls.textContent,6);
  assert.equal(rows[0].model.value,' chosen-model ');assert.equal(elements.report.style.display,'inline');
+});
+test('completion automatically lists and selects the saved session and reopens its data without another run',async()=>{
+ const saved={id:'synthetic-session',prompt:'Synthetic question',context:'Recorded context',status:'completed',readOnly:true,maxRounds:1,calls:2,spendKnownUSD:0,spendIncomplete:true,entries:[{agent:'codex',round:1,text:'Preserved original recommendation'}],tokenAccounting:{knownTotalTokens:42,missingCalls:0,calls:[]}};
+ const ui=await setup(false,false,saved),e=ui.elements;const before=ui.historyRequests.length;
+ await e.run.onclick!();ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',tokenAccounting:saved.tokenAccounting})});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(ui.historyRequests.length,before+1);assert.equal(e.savedSessions.value,saved.id);assert.match(e.saveStatus.textContent,/completed.*saved automatically/);assert.equal(e.openSaved.disabled,false);assert.equal(ui.requests.length,1);assert.equal(ui.modelRequests.length,0);
+ assert.equal(e.savedSessions.children.filter(c=>c.value===saved.id).length,1);assert.doesNotMatch(e.savedStatus.textContent,/outside these results/);
+ await e.openSaved.onclick!();assert.match(e.feed.textContent,/Preserved original recommendation/);assert.match(e.tokenTotals.textContent,/42/);assert.match(e.saveStatus.textContent,/read-only/);assert.equal(ui.historyRequests.length,before+1);assert.equal(ui.requests.length,1);assert.equal(ui.streams.length,1);
+ ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'failed'})});assert.equal(e.status.textContent,'completed');assert.match(e.saveStatus.textContent,/read-only/);assert.equal(ui.historyRequests.length,before+1);
+});
+test('completion preserves history filters/page and labels its extra option outside matching counts',async()=>{
+ const ui=await setup(false,false,undefined,false,async url=>{const p=new URL(url,'http://local').searchParams;return {ok:true,json:async()=>({sessions:[],page:Number(p.get('page')),q:p.get('q'),filters:Object.fromEntries(['provider','model','from','to'].map(k=>[k,p.get(k)||''])),pageSize:50,total:60,discoveredTotal:60,totalPages:2,hasPrevious:true,hasNext:false,unavailable:0})};},'http://local/?page=2&q=older&provider=claude&model=old-model');
+ await ui.elements.run.onclick!();ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed'})});await new Promise(resolve=>setImmediate(resolve));
+ const p=new URL(ui.historyRequests.at(-1)!,'http://local').searchParams;assert.equal(p.get('page'),'2');assert.equal(p.get('q'),'older');assert.equal(p.get('model'),'old-model');assert.equal(ui.elements.savedModel.value,'old-model');assert.equal(ui.elements.savedSessions.value,'synthetic-session');assert.match(ui.elements.savedSessions.textContent,/Just finished.*completed/);assert.match(ui.elements.savedStatus.textContent,/of 60 matching.*outside these results.*not included/);assert.equal(ui.address!.searchParams.get('session'),'synthetic-session');
+});
+test('automatic-list failure retains downloads and Refresh list retries selection and confirmation',async()=>{
+ let fail=false;const ui=await setup(false,false,undefined,false,async()=>({ok:!fail,json:async()=>fail?{error:'History unavailable'}:{sessions:[],q:'',page:1,pageSize:50,total:0,discoveredTotal:0,totalPages:1,unavailable:0}})),e=ui.elements;
+ await e.run.onclick!();fail=true;ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed'})});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(e.status.textContent,'completed');assert.match(e.saveStatus.textContent,/list could not refresh.*Refresh list/);assert.equal(e.report.style.display,'inline');assert.equal(e.jsonReport.style.display,'inline');assert.equal(e.openSaved.disabled,true);
+ fail=false;await e.refreshSaved.onclick!();assert.equal(e.savedSessions.value,'synthetic-session');assert.equal(e.openSaved.disabled,false);assert.match(e.saveStatus.textContent,/Selected in Saved discussions/);assert.equal(ui.requests.length,1);
+});
+for(const status of ['partial','failed','cancelled'])test(`${status} completion is saved and listed with its original status`,async()=>{
+ const ui=await setup();await ui.elements.run.onclick!();ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status})});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(ui.elements.status.textContent,status);assert.match(ui.elements.saveStatus.textContent,new RegExp('Session '+status+' · saved automatically'));assert.doesNotMatch(ui.elements.saveStatus.textContent,/Session completed/);assert.equal(ui.elements.savedSessions.value,'synthetic-session');
+});
+test('pending history refresh blocks a new run and late events cannot overwrite another saved review',async()=>{
+ let hold=false,release!:()=>void;const saved={id:'saved-id',prompt:'Older record',status:'completed',readOnly:true,maxRounds:1,calls:0,spendKnownUSD:0,entries:[]};
+ const ui=await setup(false,false,saved,false,async()=>{if(hold)await new Promise<void>(r=>{release=r;});return {ok:true,json:async()=>({sessions:[{...saved,createdAt:'2026-11-01'}],q:'',page:1,pageSize:50,total:1,discoveredTotal:1,totalPages:1,unavailable:0})};});
+ await ui.elements.run.onclick!();hold=true;ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed'})});assert.equal(ui.elements.run.disabled,true);await ui.elements.run.onclick!();assert.equal(ui.requests.length,1);release();await new Promise(resolve=>setImmediate(resolve));
+ ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();const count=ui.historyRequests.length;ui.streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'failed'})});ui.streams[0].onerror!();assert.equal(ui.elements.status.textContent,'completed');assert.match(ui.elements.saveStatus.textContent,/read-only/);assert.equal(ui.historyRequests.length,count);
 });
 test('UI fails closed on configuration failure and recovers controls after rejected request',async()=>{
  const failed=await setup(true);assert.equal(failed.elements.run.disabled,true);await failed.elements.run.onclick!();assert.equal(failed.requests.length,0);

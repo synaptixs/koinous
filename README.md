@@ -227,6 +227,14 @@ These are **participant declarations, not independently verified improvements**.
 Matching answers are not proof of correctness. Coverage gaps, unsupported claims,
 and dissent remain visible; similar answers are not silently merged.
 
+Discussions save automatically. When a session finishes, **Saved discussions**
+refreshes and selects it, and the Session panel confirms **saved automatically**.
+Click **Open saved discussion** to review it without another model call. Applied
+history filters and page stay intact; if they exclude the finished session, an
+extra **Just finished** option is labeled separately from the matching count.
+Partial, failed and cancelled sessions retain those statuses. If the list cannot
+refresh, use **Refresh list** to retry; report downloads remain available.
+
 Older sessions show **Not recorded** for fields they never contained. Reopening a
 session or downloading its Markdown report makes no model calls and preserves the
 original saved assessment and responses. Use `?format=original` on a report URL to

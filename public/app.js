@@ -51,6 +51,7 @@ const modelLists = new Map(), modelQueries = new Map();
 let workflowProgress = null;
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
 let historyFilters = {provider:'', model:'', from:'', to:''};
+let pendingSavedSession = null;
 function selectedHistoryFilters() { return {provider:$('savedProvider').value, model:$('savedModel').value.trim(), from:$('savedFrom').value, to:$('savedTo').value}; }
 function selection() {
   const selected = rows.filter(row => row.id);
@@ -74,7 +75,7 @@ function refresh(preferredAuthor) {
   const unavailableParticipant=rows.some(row=>!row.id||!participantOptions.some(option=>option.id===row.id));
   const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : pendingCloudSetup ? 'Register the selected cloud setup example in Ollama, then Refresh models to confirm it.' : missingModel ? 'Choose a model for every participant.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
-  $('run').disabled = busy || !!error || !inferenceEnabled;
+  $('run').disabled = busy || historyLoading || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
   for (const id of ['savedProvider','savedModel','savedFrom','savedTo','savedSessions','refreshSaved','savedSearch','searchSaved','clearSaved']) $(id).disabled = busy || historyLoading;
   $('previousSaved').disabled = busy || historyLoading || !historyPrevious;
@@ -407,20 +408,21 @@ function finish(status) {
   if (events) events.close(); refresh();
 }
 $('run').onclick = async () => {
-  if (busy || !refresh() || !inferenceEnabled) return;
+  if (busy || historyLoading || !refresh() || !inferenceEnabled) return;
   const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection(),workflowMode:$('workflowMode').value};
   if(request.workflowMode==='targeted'){request.maxRounds=3;request.author=$('author').value;request.checks=$('acceptanceChecks').value.split('\n').map(s=>s.trim()).filter(Boolean);}
   if(['wikipedia','web','both'].includes($('researchMode').value))request.research={mode:$('researchMode').value,query:$('researchQuery').value};
-  beginWorkflowProgress();sessionId = null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; refresh();
+  beginWorkflowProgress();sessionId = null; pendingSavedSession=null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; $('saveStatus').textContent = 'Saving discussion events as they arrive. The finished session will appear in Saved discussions.'; refresh();
   if (events) events.close();
   $('outcome').textContent = 'Available after the discussion.'; $('evidence').textContent = 'Idea and optional context';
   $('feed').replaceChildren(); $('status').textContent = 'Creating'; $('calls').textContent = '0'; $('cost').textContent = 'Unknown'; $('report').style.display = 'none';$('jsonReport').style.display='none';$('tokenTotals').textContent='Awaiting token accounting';$('tokenDetails').replaceChildren();
   try {
     const response = await fetch('/api/sessions', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)});
     const data = await response.json(); if (!response.ok) throw Error(data.error);
-    sessionId = data.id; $('send').disabled = request.workflowMode==='targeted'; $('cancel').disabled = false;
+    sessionId = data.id; const startedSessionId=data.id; $('send').disabled = request.workflowMode==='targeted'; $('cancel').disabled = false;
     events = new EventSource('/api/sessions/' + sessionId + '/events');
     events.onmessage = event => {
+      if(sessionId!==startedSessionId||!busy)return;
       const x = JSON.parse(event.data);recordWorkflowEvent(x);renderWorkflowFlow();
       switch (x.type) {
         case 'participants.configured': $('maxCalls').textContent = x.maxCalls; append('Selected participants', x.agents.map(id => id + ': ' + (x.selection?.models[id] || 'SDK default')).join('\n')); break;
@@ -442,11 +444,13 @@ $('run').onclick = async () => {
         case 'agent.error': append('Provider error · ' + x.agent, x.error); break;
         case 'human.intervention': append('Human intervention', x.message); break;
         case 'session.error': append('Error', x.error); break;
-        case 'session.finished': showTokens(x.tokenAccounting); finish(x.status);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline'; $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline'; syncSavedURL(); break;
+        case 'session.finished': showTokens(x.tokenAccounting); finish(x.status);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline'; $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline'; syncSavedURL();
+          $('saveStatus').textContent='Saved automatically. Updating Saved discussions…';
+          void loadSavedList(historyPage,historyQuery,historyFilters,true,{id:startedSessionId,status:x.status,prompt:request.prompt}); break;
       }
     };
-    events.onerror = () => { append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost';if(workflowProgress){workflowProgress.active=null;workflowProgress.status='Connection lost';renderWorkflowFlow();} };
-  } catch (error) { append('Error', error.message); finish('Failed to start'); }
+    events.onerror = () => { if(sessionId!==startedSessionId||!busy)return; append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost';$('saveStatus').textContent='Completion has not been confirmed. Reload to check Saved discussions; this does not cancel the running session.';if(workflowProgress){workflowProgress.active=null;workflowProgress.status='Connection lost';renderWorkflowFlow();} };
+  } catch (error) { append('Error', error.message); $('saveStatus').textContent='Discussion did not start; no finished session was confirmed.'; finish('Failed to start'); }
 };
 $('send').onclick = async () => {
   const message = $('intervene').value.trim(); if (!sessionId || !message) return;
@@ -528,8 +532,9 @@ function syncSavedURL() {
   history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
 }
 
-async function loadSavedList(page = historyPage, query = historyQuery, filters = historyFilters, updateURL = true) {
+async function loadSavedList(page = historyPage, query = historyQuery, filters = historyFilters, updateURL = true, justFinished = pendingSavedSession) {
   if (historyLoading || busy) return;
+  if(justFinished)pendingSavedSession=justFinished;
   historyLoading = true; refresh();
   try {
     const response = await fetch('/api/sessions?page=' + encodeURIComponent(page) + '&pageSize=50&q=' + encodeURIComponent(query.trim()) + Object.entries(filters).map(([key,value]) => '&' + key + '=' + encodeURIComponent(value)).join(''));
@@ -548,16 +553,21 @@ async function loadSavedList(page = historyPage, query = historyQuery, filters =
       option.textContent = s.createdAt + ' · ' + s.status + ' · ' + s.prompt.slice(0,100);
       $('savedSessions').append(option);
     }
-    $('savedSessions').value = data.sessions.some(s => s.id === previous) ? previous : '';
+    const outsideResults=justFinished&&!data.sessions.some(s=>s.id===justFinished.id);
+    if(outsideResults){const option=viewNode('option','Just finished · '+justFinished.status+' · '+justFinished.prompt.slice(0,100));option.value=justFinished.id;$('savedSessions').append(option);}
+    $('savedSessions').value = justFinished?.id || (data.sessions.some(s => s.id === previous) ? previous : '');
     const first = data.total ? (data.page - 1) * data.pageSize + 1 : 0;
     const last = data.total ? first + data.sessions.length - 1 : 0;
     $('savedStatus').textContent = 'Showing ' + first + '–' + last + ' of ' + data.total + ' matching discussions (' + data.discoveredTotal + ' readable discovered).' + (data.scanTruncated ? ' Discovery is partial; unscanned folders may contain more matches.' : '') + ' ' + data.unavailable + ' incomplete, invalid, or ambiguous records unavailable.';
+    if(outsideResults)$('savedStatus').textContent+=' The Just finished option is outside these results and is not included in the matching count.';
+    if(justFinished){const message='Session '+justFinished.status+' · saved automatically. Selected in Saved discussions; use Open saved discussion to review it.';$('saveStatus').textContent=message;$('reviewNotice').textContent=message;pendingSavedSession=null;}
     if (updateURL) syncSavedURL();
     return true;
   } catch (error) {
     $('savedStatus').textContent = error.message;
     $('savedSessions').replaceChildren(); $('savedSessions').value = '';
     historyPrevious = false; historyNext = false; $('savedPage').textContent = 'Page unavailable';
+    if(justFinished){const message='Session '+justFinished.status+' · saved automatically, but the list could not refresh. Use Refresh list to retry; report downloads remain available.';$('saveStatus').textContent=message;$('reviewNotice').textContent=message;}
     return false;
   }
   finally { historyLoading = false; refresh(); }
@@ -593,6 +603,7 @@ async function openSaved(id) {
     showTokens(s.tokenAccounting);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline';
     if(s.targeted)showTargeted(s.targeted);else if (s.outcome) showOutcome(s.outcome); else $('outcome').textContent = 'No agreement assessment was recorded for this older discussion. Review the original transcript and report.';
     $('reviewNotice').textContent = 'Reviewing saved discussion ' + s.id + ' · read-only. No model calls were made to open it.';
+    $('saveStatus').textContent='Saved discussion · read-only review.';
     $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline';
     finish(s.status);
     syncSavedURL();
