@@ -39,7 +39,7 @@ export class Engine extends EventEmitter {
     let targetedConfig:Session['targetedConfig'];
     if(workflowMode==='targeted'){
       if(policy.maxCalls<2)throw Error('Targeted review requires a budget of at least two calls');
-      if(!snapshot||snapshot.providers.length!==2||snapshot.providers.some(id=>providerFor(id)==='grok'))throw Error('Targeted review requires exactly two OpenAI/Claude participants');
+      if(!snapshot||snapshot.providers.length!==2||snapshot.providers.some(id=>providerFor(id)==='grok'))throw Error('Targeted review requires exactly two OpenAI, Claude or Ollama participants');
       const author=options.author??(snapshot.providers.includes('claude')?'claude':snapshot.providers[0]);
       if(!snapshot.providers.includes(author as never))throw Error('Author must be a selected participant');
       const checks=options.checks??[];

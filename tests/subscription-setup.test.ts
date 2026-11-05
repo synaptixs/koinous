@@ -43,6 +43,6 @@ test('OpenAI-only startup requires Codex subscription, never checks Claude and f
  await assert.rejects(preparePersonalDiscussion(args,async()=>ok('Logged in using an API key')),/Codex subscription/);
  assert.equal(process.env.KOINOUS_ENABLE_INFERENCE,'0');
  const app=await preparePersonalDiscussion(args,async(p,a)=>{calls.push(p+':'+a);return ok('Logged in using ChatGPT');});
- assert.deepEqual(calls,['codex:status']);assert.equal(process.env.KOINOUS_DISABLED_PROVIDERS,'claude,grok');assert.equal(process.env.KOINOUS_PROVIDERS,'codex');assert.equal(app.engine.sessions.size,0);
+ assert.deepEqual(calls,['codex:status']);assert.equal(process.env.KOINOUS_DISABLED_PROVIDERS,'claude,grok,ollama-local,ollama-cloud');assert.equal(process.env.KOINOUS_PROVIDERS,'codex');assert.equal(app.engine.sessions.size,0);
  await app.shutdown();process.env.KOINOUS_ENABLE_INFERENCE='0';
 });

@@ -13,7 +13,7 @@ for (const roster of ['codex,claude', 'codex,grok', 'claude,grok', 'grok,claude,
   });
 }
 for (const roster of ['', 'codex,codex', 'codex,gemini', 'codex,claude,', 'codex,claude,grok,codex']) {
-  test(`rejects invalid roster before dispatch: ${roster}`, () => assert.throws(() => configuredProviders(roster), /at least two distinct/));
+  test(`rejects invalid roster before dispatch: ${roster}`, () => assert.throws(() => configuredProviders(roster), /two or three distinct supported/));
 }
 test('provider whitespace is normalized and unselected transports do not constrain a pair', t => {
   const old=process.env.GROK_TRANSPORT;

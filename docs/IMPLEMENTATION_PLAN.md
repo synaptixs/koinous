@@ -29,6 +29,61 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Ollama selection iteration — 2026-11-04 (offline)
+
+| Ollama iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Official API contracts, existing selection and measured PKG impact | Passed |
+| Implement | 25% | Local/Cloud slots, metadata picker, native chat, saved/export compatibility | Passed |
+| Verify | 25% | Offline adapter/API/UI/security tests, full check, mock browser | Passed |
+| Document | 25% | Demo/live setup, auth, effort, accounting and limitations | Passed |
+
+The picker adds `ollama-local` / `ollama-cloud`, each with a second participant
+slot, retaining all old IDs and default participants. Both use the local loopback
+Ollama daemon; Cloud delegates login to `ollama signin`. No API keys or new SDK
+dependencies. Explicit Refresh reads `/api/tags` only; mock Refresh is entirely
+synthetic. Listings are bounded (200 of the reported total), omit unsupported
+metadata with a count, and do not download models or verify quota. `/api/show`
+checks location metadata and completion capability before each fresh text-only
+chat; model suffixes do not determine routing. Non-official remote hosts refuse.
+Protected tenant routes deny access to the personal daemon. Original provider
+defaults and existing saved evidence remain compatible.
+
+Ollama uses model default effort, surfaced in UI and Markdown rather than claiming
+OpenAI/Claude effort enforcement. Native prompt/output counters enter the existing
+canonical token accounting; cache is a subset, costs and unreported helpers stay
+unknown. The existing engine owns latency, deadlines, cancellation, stop-on-failure
+and conditional revision. No extra synthesis or retry call is introduced. Live
+Ollama behavior, entitlements and recommendation quality remain unverified.
+
+Impact measured against clean main aa94689 in an isolated worktree (including a
+repeat after editing to ensure the same source baseline): providerFor13 callers,
+validateParticipants3, modelDefaults3, defaultParticipants1, resolveSelection17,
+validateProviders1/1 doc, configuredProviders9/1 doc, enabledProviders4,
+createAdapters15, MockAdapter.run1/3 docs, Engine.create42/1 doc,
+createApplication16/2 docs, createProtectedApplication6/1 doc, historyQuery10/1 doc,
+targetedMarkdown2, UI refresh10/1 doc, WorkerProfiles8/2 docs, workerEnvironment5,
+callTimeoutMs8, preparePersonalDiscussion6. AgentId/ProfileOwner each have zero
+bound creators; AGENTS/PARTICIPANT_PROVIDERS constants are not graph nodes, so
+their uses were confirmed by text search. No truncation; TS/JS untraced calls are
+not tracked and counts are floors. Regression gaps flag server, secure-server,
+demo/start-real/evaluate and UI entry paths. Offline API/UI/startup/security
+regressions exercise applicable behavior; benchmark arms are unchanged. Raw
+measurements and the working plan are outside the checkout under notes.
+
+Offline gate: TypeScript, 587 Node tests and 33 Python tests passed with inference
+disabled. The 18 added regressions cover routing, metadata-only discovery, bounded
+output, abort, unknown/partial counters, targeted saved exports, mixed selections,
+UI choices and protected-mode refusal. Mock browser verification selected Local
+and Cloud demo models through Refresh and confirmed the matching IDs and effort
+labels; no discussion was started. Gate log: `/private/tmp/koinous-ollama-check.log`.
+Screenshot: `/Users/falcon/projects/collab/deliverables/ollama-selection/picker.png`
+(outside the checkout).
+
+Overall 48.33% and P6 80% do not move. No inference, login, install or model pull
+was performed for this iteration. This is a picker/integration change, not empirical
+acceptance or authorization to resume the cache-policy experiment.
+
 ### Targeted review iteration — 2026-11-04 (offline)
 
 New UI default: one author draft, one targeted review, conditional author revision.

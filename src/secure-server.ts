@@ -1,3 +1,4 @@
+import {AGENTS,PROVIDER_LABELS} from './core.ts';
 import {SDKWorkers} from './sdk-worker.ts';
 import {WorkerProfiles} from './worker-profiles.ts';
 import {ProfileWorkers} from './profile-worker.ts';
@@ -119,9 +120,10 @@ export function createProtectedApplication(options:Options){
     forwarded=Object.assign(Readable.from([data]),{url:req.url,method:req.method,headers:req.headers}) as IncomingMessage;
    }
    audit.record({subject:principal.subject,tenant:principal.tenant,action,resource,decision:'allow',reason:'authenticated_access_attempt'});
+   if(url.pathname==='/api/models')return deny(403,'tenant_provider_isolation_pending');
    if(req.method==='GET'&&url.pathname==='/api/health'){
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    return res.end(JSON.stringify({status:'ok',mode,authentication:browserSession?'browser-session':'application-bearer',providerAuthentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock',uiSupported:!!browser,agents:configuredProviders(),availableProviders:enabledProviders().map(id=>({id,label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[id],defaultModel:modelDefaults()[id]||''}))}));
+    return res.end(JSON.stringify({status:'ok',mode,authentication:browserSession?'browser-session':'application-bearer',providerAuthentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock',uiSupported:!!browser,agents:configuredProviders(),availableProviders:enabledProviders().filter(id=>(AGENTS as readonly string[]).includes(id)).map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:modelDefaults()[id]||''}))}));
    }
    if(browser&&req.method==='GET'&&url.pathname==='/'){
     const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8').replace('<script src="/app.js"','<script src="/browser-session.js"></script><script src="/app.js"');

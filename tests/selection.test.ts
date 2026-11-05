@@ -17,5 +17,5 @@ for(const input of [null,[],{providers:['codex','claude'],models:null},{}, {prov
 test('blank model uses configured default; omission uses roster defaults',()=>{
  assert.equal(resolveSelection({providers:['codex','claude'],models:{codex:''}},defaults).models.codex,'codex-default');
  assert.deepEqual(resolveSelection(undefined,defaults).providers,defaults.providers);
- assert.deepEqual(modelDefaults({}),{codex:'',claude:'',grok:'grok-4.7'});
+ assert.deepEqual(modelDefaults({}),{codex:'',claude:'',grok:'grok-4.7','ollama-local':'','ollama-cloud':''});
 });

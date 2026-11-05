@@ -36,10 +36,14 @@ Run `npm run check` after source/test changes. Use the PKG first for navigation
 and measure blast radius and regression gaps before changing existing symbols.
 Preserve the design record in `docs/IMPLEMENTATION_PLAN.md` and existing work.
 
-Application providers must use subscription login, not API-key fallback. Keep
+Cloud providers must use their existing login, not API-key fallback. Ollama Local
+uses an unauthenticated loopback daemon; Ollama Cloud uses the same daemon with
+`ollama signin`. Never expose this personal daemon through tenant-scoped routes.
+Keep
 `KOINOUS_PROVIDERS` configurable with one or more supported providers. Discussions
 require two or three distinct participants; OpenAI/Claude may each supply two
-participants using explicit different model IDs. Preserve legacy selection wire
+participants using explicit different model IDs; each Ollama location can too.
+Preserve legacy selection wire
 names and historical IDs. Provider disabling applies to every participant slot.
 Preserve explicit unknown costs; never substitute API list prices for subscription
 charges. Historical API smoke scripts are not the subscription validation path.

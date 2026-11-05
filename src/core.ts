@@ -16,8 +16,11 @@ import type {Position,Outcome} from './discussion-outcome.ts';
 import type {Provenance} from './published-pkg.ts';
 import type {Selection} from './selection.ts';
 import {usageSummary} from './provider-runtime.ts';
-export type AgentId = 'codex' | 'claude' | 'grok';
-export const AGENTS: AgentId[] = ['codex', 'claude', 'grok'];
+export type AgentId = 'codex' | 'claude' | 'grok' | 'ollama-local' | 'ollama-cloud';
+// Preserve the original default roster; supporting a provider does not select it.
+export const AGENTS = ['codex', 'claude', 'grok'] as const;
+export const PROVIDER_LABELS:Record<AgentId,string> = {codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build','ollama-local':'Ollama Local','ollama-cloud':'Ollama Cloud'};
+export const SUPPORTED_PROVIDERS = Object.keys(PROVIDER_LABELS) as AgentId[];
 export type Round = 1 | 2 | 3;
 export type Entry = Reply & {agent: ParticipantId; round: Round; stage?:'draft'|'review'|'revision'; durationMs?: number;validation?:ResponseValidation;position?:Position|null};
 export type Usage = {inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number; reasoningTokens?: number; usd?: number | null; costSource?: 'provider-estimate' | 'provider-reported' | 'mock'};

@@ -1,4 +1,5 @@
 import {tokenAccounting} from './token-accounting.ts';
+import {ollamaModels,isOllama} from './ollama.ts';
 import {PARTICIPANTS,providerFor} from './participants.ts';
 import {workflowAssessment,responseValidation} from './discussion-workflow.ts';
 import {createServer} from 'node:http';
@@ -14,9 +15,9 @@ import {Engine} from './engine.ts';
 import {createAdapters} from './adapters.ts';
 import {enabledProviders,assertProvidersEnabled} from './provider-config.ts';
 import {usageSummary} from './provider-runtime.ts';
-import {boundedInt,makeReport,originalMarkdown} from './core.ts';
+import {boundedInt,makeReport,originalMarkdown,PROVIDER_LABELS} from './core.ts';
 
-export function createApplication(options: {mode?: string; outputDir?: string; defaults?: Selection; port?: number; adapterFactory?: typeof createAdapters} = {}) {
+export function createApplication(options: {mode?: string; outputDir?: string; defaults?: Selection; port?: number; adapterFactory?: typeof createAdapters; ollamaFetch?:typeof fetch} = {}) {
 const port=options.port ?? boundedInt(process.env.PORT,3030,1,65535);
 const host='127.0.0.1';
 const mode=options.mode || process.env.MODE || 'mock';
@@ -43,7 +44,15 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
     if(req.method==='POST'&&req.headers.origin){const origin=new URL(req.headers.origin);if(!(['localhost','127.0.0.1'].includes(origin.hostname)&&Number(origin.port)===port)){return json(res,403,{error:'Origin denied'});}}
     if(req.method==='GET'&&url.pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'"});return res.end(html);}
     if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(script);}
-    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
+    if(req.method==='GET'&&url.pathname==='/api/models'){
+      const provider=url.searchParams.get('provider')||'';
+      if(!isOllama(provider)||!enabledProviders().includes(provider))return json(res,400,{error:'Choose an enabled Ollama provider'});
+      // Explicit metadata refresh only; mock mode must not touch a real daemon.
+      if(mode==='mock')return json(res,200,{provider,models:provider==='ollama-local'?['demo-local:small','demo-local:large']:['demo-cloud:small','demo-cloud:large'],total:2,truncated:false,unsupported:0,source:'mock',inferencePerformed:false});
+      try{return json(res,200,await ollamaModels(provider,options.ollamaFetch));}
+      catch{return json(res,503,{error:'Ollama model list unavailable. Start Ollama and register models, then refresh. No inference was requested.'});}
+    }
+    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:isOllama(providerFor(id)),effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
     if(req.method==='GET'&&url.pathname==='/api/sessions'){
       const query=historyQuery(url.searchParams);
       const found=saved.list();

@@ -2,7 +2,11 @@
 
 This playbook covers one trusted workstation and P6 evaluation. It does not deliver
 enterprise deployment, corporate account verification or PKG integration. Use only
-subscription login; no API-key fallback. Grok stays off. Saved product sessions and
+provider login for cloud models; no API-key fallback. Local Ollama requires no
+login; Ollama Cloud uses `ollama signin` through the workstation daemon. See
+[Ollama setup](DEMO.md#ollama-local-and-cloud). The P6 evaluation harness remains
+scoped to its existing approved OpenAI/Claude arms; new picker options do not expand
+benchmark authorization. Grok stays off. Saved product sessions and
 original validation policy are never edited by evaluation. Start from the clean
 revision under review in an isolated checkout with `npm ci`; preserve other work.
 Node >=22.10 is required; exact installed SDK/compiler versions must match package.json.

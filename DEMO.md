@@ -64,6 +64,51 @@ Codex/Claude discussion path has passed a bounded live UI run with six responses
 complete peer coverage, a nonblocking length warning and an attributed recommendation.
 Other operating systems and new-account browser login flows remain unverified.
 
+## Ollama local and cloud
+
+Use a current [Ollama](https://ollama.com/download) release with `/api/tags` and
+`/api/show` location metadata and text-completion capabilities. Start the app/daemon.
+Local models must already be downloaded; Cloud model entries must be registered
+with that daemon. Choose models in Ollama first. Koinous never pulls models or
+starts sign-in. Cloud additionally requires `ollama signin` with your intended
+Ollama account; it uses Ollama's [local authenticated API path](https://docs.ollama.com/api/authentication),
+not the direct cloud API-key path.
+
+```sh
+npm ci
+npm run start:real -- --enable-inference --ollama-only
+```
+
+This launcher does not require OpenAI or Claude login. It starts a server, with no
+model prompts until **Start discussion**. Open http://127.0.0.1:3030; select two
+Local/Cloud participants, click **Refresh models**, and choose models. Each has a
+second slot for another model from that location. Same-provider slots require
+different explicit IDs. The ordinary Codex + Claude launcher also exposes Ollama
+for mixed selections; `--openai-only` disables it.
+
+**Refresh models** reads only the local registry. Cloud names are daemon model
+names, which can differ from direct cloud API names. If the list is empty, add the
+model through Ollama outside Koinous and refresh. If the list is unavailable, check
+that Ollama is running. If metadata is unsupported or Local/Cloud doesn't match,
+update Ollama or choose the correct location. An authorization error for Cloud
+requires signing in outside Koinous; a listed model does not prove entitlement or quota.
+
+Default endpoint: `http://127.0.0.1:11434`. Set `KOINOUS_OLLAMA_URL` before startup
+for another loopback HTTP origin/port. Remote URLs, credentials, paths and redirects
+are rejected. `OLLAMA_LOCAL_MODEL` / `OLLAMA_CLOUD_MODEL` can supply defaults with
+the general `npm start` entry point; all selections remain editable in the UI.
+`OLLAMA_LOCAL_TIMEOUT_MS` / `OLLAMA_CLOUD_TIMEOUT_MS` override the default per-call
+deadline (`MODEL_TIMEOUT_MS`, normally 120 seconds). Local loading can consume
+much of that deadline. An abort stops waiting; it cannot guarantee remote work stopped.
+
+The application uses model default effort for Ollama and sends no tools. Token
+usage is reported input + output; cached prompt tokens are a subset. Unreported
+helper usage and cost remain unknown. Saved selections, token accounting and
+Markdown/JSON downloads use the same workflow as other providers. Protected
+multi-tenant mode does not expose the personal daemon. Offline mock UI/tests
+verify integration; live compatibility, recommendation quality and savings remain
+unverified. No new inference run is authorized by this documentation.
+
 ## Fastest setup: no credentials and no model calls
 
 Use Node.js 22.16 or newer (Node 22.10 is the package minimum). Extract the source
@@ -83,7 +128,8 @@ a final recommendation, next actions and disagreements. It is not a real model r
 Startup copies it into ignored `runs/` once; subsequent starts preserve existing data.
 
 The launcher does not load `.env` and overrides inherited provider/mode/inference
-settings: mock Codex and Claude only, Grok off, both live-inference switches disabled.
+settings: mock Codex and Claude initially selected, mock Ollama choices available,
+Grok off, both live-inference switches disabled.
 No login, API key, VM, dependency installation or model call is needed. New discussions
 are also mock-only. Keep research set to “Use idea and supplied context” for an offline demo.
 

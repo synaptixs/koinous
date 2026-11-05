@@ -8,12 +8,13 @@ class Element {
   private ownText='';
   get textContent():string{return this.children.length?this.ownText+this.children.map(c=>c.textContent).join(''):this.ownText;}
   set textContent(value:string){this.ownText=value;this.children=[];}
+  setAttribute(_name:string,_value:string){}
   start=1;
   onclick?:()=>Promise<void>; onchange?:()=>void; oninput?:()=>void;
   append(...children:Element[]){this.children.push(...children);}
   replaceChildren(){this.children=[];this.ownText='';}
 }
-async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={}) {
+async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>) {
   const elements=Object.fromEntries(['stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
@@ -24,6 +25,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   }
   const fetch=async(url:string,options?:{body?:string})=>{
     if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}],...healthOverride})};
+    if(url.startsWith('/api/models?')&&modelFetch)return modelFetch(url);
     if(url.startsWith('/api/sessions?')&&!options){historyRequests.push(url);if(historyFetch)return historyFetch(url);return {ok:true,json:async()=>({sessions:saved?[{id:saved.id,prompt:saved.prompt,status:saved.status,createdAt:'2026-11-01'}]:[],total:saved?1:0,discoveredTotal:saved?1:0,unavailable:0,truncated:false,scanTruncated:false,page:1,pageSize:50,totalPages:1,q:'',hasPrevious:false,hasNext:false})};}
     if(url==='/api/sessions/saved-id'&&!options)return {ok:true,json:async()=>saved};
     requests.push({url,...JSON.parse(options?.body||'{}')});
@@ -36,6 +38,28 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const rows=elements.providerChoices.children.map(card=>({toggle:card.children[0].children[0],model:card.children[2]}));
   return {elements,rows,requests,streams,historyRequests,address,urlWrites};
 }
+const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
+test('Ollama UI explicitly refreshes metadata, selects models and records default effort',async()=>{
+ const metadataRequests:string[]=[];
+ const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async url=>{metadataRequests.push(url);return {ok:true,json:async()=>({models:['registered-model'],total:1,source:'mock',truncated:false,unsupported:0})};});
+ assert.equal(metadataRequests.length,0);assert.equal(f.elements.run.disabled,true);
+ for(const card of f.elements.providerChoices.children){const picker=card.children[4],button=card.children[5];await button.onclick!();picker.value='registered-model';picker.onchange!();assert.match(card.children[6].textContent,/1 of 1 registered models/);}
+ assert.deepEqual(metadataRequests,['/api/models?provider=ollama-local','/api/models?provider=ollama-cloud']);
+ f.elements.workflowMode.value='targeted';f.elements.workflowMode.onchange!();assert.match(f.elements.roleNote.textContent,/model default effort/);assert.doesNotMatch(f.elements.roleNote.textContent,/low effort|medium effort/);assert.equal(f.elements.run.disabled,false);
+ await f.elements.run.onclick!();assert.equal(f.requests.length,1);assert.deepEqual(f.requests[0].selection,{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'registered-model','ollama-cloud':'registered-model'}});
+ assert.ok(f.elements.providerChoices.children.every(card=>card.children[4].disabled&&card.children[5].disabled));
+});
+test('Ollama UI reports metadata errors while inference stays disabled',async()=>{
+ const f=await setup(false,false,undefined,true,undefined,undefined,ollamaHealth,async()=>({ok:false,json:async()=>({error:'Start Ollama and refresh.'})}));
+ const card=f.elements.providerChoices.children[0];await card.children[5].onclick!();assert.equal(card.children[6].textContent,'Start Ollama and refresh.');assert.equal(f.elements.run.disabled,true);assert.equal(f.requests.length,0);
+});
+test('saved Ollama selection and accounting reopen without model discovery or inference',async()=>{
+ const saved={id:'saved-id',prompt:'Old task',status:'completed',readOnly:true,maxRounds:3,calls:2,spendKnownUSD:0,spendIncomplete:true,workflowMode:'targeted',targetedConfig:{author:'ollama-local',checks:[]},selection:{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'saved-local','ollama-cloud':'saved-cloud'}},entries:[],tokenAccounting:{knownTotalTokens:120,missingCalls:0,calls:[]}};
+ const f=await setup(false,false,saved,true,undefined,undefined,ollamaHealth,async()=>{throw Error('Saved view must not discover models');});
+ await f.elements.openSaved.onclick!(); // No selected history ID yet.
+ f.elements.savedSessions.value='saved-id';await f.elements.openSaved.onclick!();
+ assert.equal(f.rows[0].model.value,'saved-local');assert.equal(f.rows[1].model.value,'saved-cloud');assert.match(f.elements.tokenTotals.textContent,/120/);assert.equal(f.requests.length,0);assert.match(f.elements.roleNote.textContent,/model default effort/);
+});
 test('UI hydrates defaults, requires two, disables deselected models and updates call bounds',async()=>{
  const {elements,rows,requests}=await setup();
  assert.equal(rows.length,3);assert.equal(rows[0].model.placeholder,'codex-default');assert.equal(rows[2].model.disabled,true);
