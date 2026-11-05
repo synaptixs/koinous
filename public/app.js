@@ -45,31 +45,35 @@ function viewDetails(title,...children){const detail=viewNode('details',undefine
 const $ = id => document.getElementById(id);
 let sessionId = null, events = null, ready = false, busy = false, inferenceEnabled = false, webSearchAvailable = false;
 const rows = [];
+let participantOptions = [], providerOptions = [], nextRow = 0;
+const modelLists = new Map(), modelQueries = new Map();
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
 let historyFilters = {provider:'', model:'', from:'', to:''};
 function selectedHistoryFilters() { return {provider:$('savedProvider').value, model:$('savedModel').value.trim(), from:$('savedFrom').value, to:$('savedTo').value}; }
 function selection() {
-  const selected = rows.filter(row => row.toggle.checked);
+  const selected = rows.filter(row => row.id);
   return {providers: selected.map(row => row.id), models: Object.fromEntries(selected.map(row => [row.id, row.model.value.trim()]))};
 }
-function refresh() {
+function refresh(preferredAuthor) {
   const chosen = selection();
   const invalidModel = Object.values(chosen.models).some(value => value.length > 128 || (value && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value)));
-  const selected=rows.filter(row=>row.toggle.checked);
+  const selected=rows.filter(row=>row.id);
   const duplicateModel=selected.some(row=>selected.some(other=>other!==row&&other.provider===row.provider&&(!(row.model.value.trim()||row.defaultModel)||!(other.model.value.trim()||other.defaultModel)||(row.model.value.trim()||row.defaultModel)===(other.model.value.trim()||other.defaultModel))));
   const targeted=$('workflowMode').value==='targeted';
-  const previousAuthor=$('author').value;
+  const previousAuthor=typeof preferredAuthor==='string'?preferredAuthor:$('author').value;
   $('author').replaceChildren();
-  for(const id of chosen.providers){const option=viewNode('option',id);option.value=id;$('author').append(option);}
+  for(const row of selected){const option=viewNode('option',participantLabel(row));option.value=row.id;$('author').append(option);}
   $('author').value=chosen.providers.includes(previousAuthor)?previousAuthor:chosen.providers.includes('claude')?'claude':chosen.providers[0]||'';
   $('stageTags').replaceChildren();for(const label of targeted?['1 · Draft','2 · Targeted review','3 · Revision if needed']:['1 · Independent','2 · Critique','3 · Collaborate'])$('stageTags').append(viewNode('span',label,'tag'));
   const effort=(id,role)=>rows.find(row=>row.id===id)?.effortMode==='model-default'?'model default effort':role+' effort';
   const reviewer=chosen.providers.find(id=>id!==$('author').value)||'unselected';
-  $('roleNote').textContent=targeted?'Author '+$('author').value+' · '+effort($('author').value,'low')+'; reviewer '+reviewer+' · '+effort(reviewer,'medium')+'. Fresh requests; at most three calls.':'Full discussion: participants exchange independent positions over the selected rounds.';
+  const roleLabel=id=>{const row=rows.find(r=>r.id===id);return row?participantLabel(row):'unselected';};
+  $('roleNote').textContent=targeted?'Author: '+roleLabel($('author').value)+' · '+effort($('author').value,'low')+'; reviewer: '+roleLabel(reviewer)+' · '+effort(reviewer,'medium')+'. Fresh requests; at most three calls.':'Full discussion: participants exchange independent positions over the selected rounds.';
   const missingOllama=selected.some(row=>row.modelDiscovery&&!(row.model.value.trim()||row.defaultModel));
   const unavailableLocal=selected.some(row=>row.requiresInstalledModel&&!row.availableModels.includes(row.model.value.trim()||row.defaultModel));
   const unavailableResearch=['web','both'].includes($('researchMode').value)&&!webSearchAvailable;
-  const error = targeted&&(chosen.providers.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const unavailableParticipant=rows.some(row=>!row.id||!participantOptions.some(option=>option.id===row.id));
+  const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
   $('run').disabled = busy || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
@@ -78,9 +82,23 @@ function refresh() {
   $('nextSaved').disabled = busy || historyLoading || !historyNext;
   $('rounds').disabled = busy || targeted;
   for(const id of ['workflowMode','author','acceptanceChecks'])$(id).disabled=busy;
-  $('usePair').disabled=busy||!rows.some(r=>r.id==='claude')||!rows.some(r=>r.id==='codex');
+  $('usePair').disabled=busy||!participantOptions.some(r=>r.id==='claude')||!participantOptions.some(r=>r.id==='codex');
   for(const id of ['researchMode','researchQuery']) $(id).disabled = busy;
-  for (const row of rows) { row.toggle.disabled = busy || (row.requiresInstalledModel&&!row.availableModels.length&&!row.toggle.checked); row.model.disabled = busy || !row.toggle.checked; if(row.modelPicker)row.modelPicker.disabled=busy||!row.toggle.checked; if(row.refreshModels)row.refreshModels.disabled=busy||row.loadingModels; }
+  $('addParticipant').hidden=targeted;
+  $('addParticipant').disabled=busy||!ready||rows.length>=3;
+  for (const row of rows) {
+    const number=rows.indexOf(row)+1;
+    row.title.textContent='Participant '+number;
+    row.providerSelect.setAttribute('aria-label','Participant '+number+' provider');
+    row.model.setAttribute('aria-label','Participant '+number+' model ID');
+    row.modelPicker.setAttribute('aria-label','Participant '+number+' registered models');
+    row.refreshModels.setAttribute('aria-label','Refresh models for participant '+number);
+    row.remove.setAttribute('aria-label','Remove participant '+number);
+    row.providerSelect.disabled=busy;row.model.disabled=busy||!row.id;row.modelPicker.disabled=busy||!row.id;
+    row.refreshModels.disabled=busy||modelQueries.has(row.provider);
+    row.remove.hidden=rows.length<=2;row.remove.disabled=busy;
+    for(const option of row.providerSelect.children)if(option.value)option.disabled=(targeted&&option.value==='grok')||!participantOptions.some(candidate=>candidate.provider===option.value&&!rows.some(other=>other!==row&&other.id===candidate.id));
+  }
   $('plannedCalls').textContent = targeted?3:chosen.providers.length * Number($('rounds').value);
   if (!sessionId) $('maxCalls').textContent = $('plannedCalls').textContent;
   return !error;
@@ -194,14 +212,80 @@ function appendResponse(entry) {
   const raw=node('details',undefined,'response-original');raw.append(node('summary','Original response'),node('pre',original));card.append(raw);
   $('feed').append(card);
 }
+function participantLabel(row) {
+  const label=providerOptions.find(option=>option.id===row.provider)?.label||row.id||'Choose provider';
+  return 'Participant '+(rows.indexOf(row)+1)+' · '+label+' · '+(row.model.value.trim()||row.defaultModel||'SDK default');
+}
 function showModelChoices(provider,data) {
+  modelLists.set(provider,data);
   for(const row of rows.filter(r=>r.provider===provider)){
     row.availableModels=[...data.models];
     row.modelPicker.replaceChildren();const placeholder=viewNode('option','Choose a registered model');placeholder.value='';row.modelPicker.append(placeholder);
     for(const id of data.models){const option=viewNode('option',id);option.value=id;row.modelPicker.append(option);}
-    if(row.requiresInstalledModel&&!data.models.length)row.toggle.checked=false;
-    row.modelStatus.textContent=(data.source==='mock'?'Demo models. ':'')+data.models.length+' of '+data.total+' registered models'+(data.truncated?' (list truncated)':'')+'. '+(data.unsupported?data.unsupported+' unsupported entries omitted. ':'')+(row.requiresInstalledModel&&!data.models.length?'No local models installed; local selection is unavailable. ':'')+'No inference requested.';
+    row.modelPicker.value=data.models.includes(row.model.value)?row.model.value:'';
+    row.modelStatus.textContent=(data.source==='mock'?'Demo models. ':'')+data.models.length+' of '+data.total+' registered models'+(data.truncated?' (list truncated)':'')+'. '+(data.unsupported?data.unsupported+' unsupported entries omitted. ':'')+(row.requiresInstalledModel&&!data.models.length?'No local models installed; choose another provider or refresh after installing one. ':'')+'No inference requested.';
   }
+}
+function configureParticipant(row,capability,modelValue) {
+  Object.assign(row,{id:capability?.id||'',provider:capability?.provider||'',defaultModel:capability?.defaultModel||'',modelDiscovery:!!capability?.modelDiscovery,requiresInstalledModel:!!capability?.requiresInstalledModel,effortMode:capability?.effortMode,availableModels:[]});
+  row.providerSelect.value=row.provider;
+  row.model.value=modelValue??row.defaultModel;
+  row.model.placeholder=row.defaultModel||(row.modelDiscovery?'Choose or enter a registered model ID':'SDK default');
+  row.note.textContent=row.modelDiscovery?(row.requiresInstalledModel?'Local models must be installed on this machine.':'Cloud processing via signed-in Ollama.')+' Refresh lists registered models without inference. Uses model default effort.':'Default: '+(row.defaultModel||'SDK default')+(row.provider==='grok'?' · Build runtime must be configured':'');
+  row.discovery.hidden=!row.modelDiscovery;
+  row.modelPicker.replaceChildren();const placeholder=viewNode('option','Refresh to list registered models');placeholder.value='';row.modelPicker.append(placeholder);
+  row.modelStatus.textContent='No model list requested.';
+  if(modelLists.has(row.provider))showModelChoices(row.provider,modelLists.get(row.provider));
+}
+function addParticipant(capability,modelValue) {
+  if(rows.length>=3)return;
+  const key=++nextRow,card=viewNode('div',undefined,'choice participant-choice');
+  const title=viewNode('h3'),providerLabel=viewNode('label','Provider'),providerSelect=viewNode('select');providerSelect.id='participant-provider-'+key;providerLabel.htmlFor=providerSelect.id;
+  const placeholder=viewNode('option','Choose provider');placeholder.value='';providerSelect.append(placeholder);
+  for(const provider of providerOptions){const option=viewNode('option',provider.label);option.value=provider.id;providerSelect.append(option);}
+  const modelLabel=viewNode('label','Model ID'),model=viewNode('input');model.type='text';model.id='participant-model-'+key;modelLabel.htmlFor=model.id;model.maxLength=128;model.autocomplete='off';
+  const note=viewNode('small'),discovery=viewNode('div'),modelPicker=viewNode('select'),pickerLabel=viewNode('label','Registered models');modelPicker.id='participant-models-'+key;pickerLabel.htmlFor=modelPicker.id;
+  const refreshModels=viewNode('button','Refresh models','secondary');refreshModels.type='button';
+  const modelStatus=viewNode('small','No model list requested.');modelStatus.setAttribute('role','status');
+  discovery.append(pickerLabel,modelPicker,refreshModels,modelStatus);
+  const remove=viewNode('button','Remove','secondary');remove.type='button';
+  const row={card,title,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,remove};rows.push(row);
+  configureParticipant(row,capability,modelValue);card.append(title,providerLabel,providerSelect,modelLabel,model,note,discovery,remove);$('participantChoices').append(card);
+  providerSelect.onchange=()=>{
+    if(busy)return;
+    const wasAuthor=$('author').value===row.id;
+    const capability=participantOptions.find(option=>option.provider===providerSelect.value&&!rows.some(other=>other!==row&&other.id===option.id));
+    configureParticipant(row,capability);
+    refresh(wasAuthor?row.id:undefined);
+  };
+  model.oninput=refresh;
+  modelPicker.onchange=()=>{if(!busy&&modelPicker.value){model.value=modelPicker.value;refresh();}};
+  remove.onclick=()=>{if(busy||rows.length<=2)return;rows.splice(rows.indexOf(row),1);$('participantChoices').replaceChildren(...rows.map(row=>row.card));refresh();};
+  refreshModels.onclick=async()=>{
+    const provider=row.provider;
+    if(busy||!row.modelDiscovery||modelQueries.has(provider))return;
+    const query={};modelQueries.set(provider,query);refresh();modelStatus.textContent='Reading Ollama model metadata…';
+    try{
+      const response=await fetch('/api/models?provider='+encodeURIComponent(provider)),data=await response.json();
+      if(!response.ok)throw Error(data.error||'Model list unavailable.');
+      if(modelQueries.get(provider)===query)showModelChoices(provider,data);
+    }catch(error){
+      modelLists.delete(provider);
+      for(const other of rows.filter(r=>r.provider===provider)){other.availableModels=[];other.modelPicker.replaceChildren();other.modelStatus.textContent=error.message;}
+    }finally{if(modelQueries.get(provider)===query)modelQueries.delete(provider);refresh();}
+  };
+  return row;
+}
+function setParticipants(chosen) {
+  rows.splice(0);$('participantChoices').replaceChildren();
+  for(const id of chosen.providers){
+    const capability=participantOptions.find(option=>option.id===id);
+    const row=addParticipant(capability,chosen.models[id]||'');
+    if(!capability&&row){row.id=id;const unavailable=viewNode('option','Unavailable on this server: '+id);unavailable.value='';row.providerSelect.replaceChildren(unavailable);row.note.textContent='Saved participant is unavailable on this server. Choose an enabled provider to start a new discussion.';
+      for(const provider of providerOptions){const option=viewNode('option',provider.label);option.value=provider.id;row.providerSelect.append(option);}
+    }
+  }
+  while(rows.length<2)addParticipant();
 }
 const configurationReady = fetch('/api/health').then(async response => {
   if (!response.ok) throw Error('Configuration unavailable');
@@ -211,42 +295,18 @@ const configurationReady = fetch('/api/health').then(async response => {
   for(const option of $('researchMode').children)if(['web','both'].includes(option.value))option.disabled=!webSearchAvailable;
   $('researchStatus').textContent=webSearchAvailable?'Wikipedia and web search are available. Research is optional and off by default.':'Wikipedia is available. Web search is not configured on this server. Research is optional and off by default.';
   $('providers').textContent = health.mode === 'mock' ? 'Mock mode · no model calls' : 'OpenAI/Claude: personal or enterprise account login · Ollama: cloud sign-in or local models';
-  for (const provider of health.availableParticipants || health.availableProviders) {
-    const card = document.createElement('div'); card.className = 'choice';
-    const label = document.createElement('label');
-    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = !provider.requiresInstalledModel&&health.agents.includes(provider.id)&&($('workflowMode').value!=='targeted'||health.agents.filter(id=>id!=='grok').slice(0,2).includes(provider.id)); toggle.id = 'provider-' + provider.id;
-    label.append(toggle, document.createTextNode(provider.label));
-    const modelLabel = document.createElement('label'); modelLabel.textContent = provider.label + ' model ID'; modelLabel.htmlFor = 'model-' + provider.id;
-    const model = document.createElement('input'); model.type = 'text'; model.id = modelLabel.htmlFor; model.maxLength = 128; model.placeholder = provider.defaultModel || (provider.modelDiscovery?'Choose or enter a registered model ID':'SDK default'); model.autocomplete = 'off';
-    const note = document.createElement('small'); note.textContent = provider.modelDiscovery?(provider.requiresInstalledModel?'Local is available only when a model is installed on this machine.':'Cloud processing via signed-in Ollama.')+' Refresh lists registered models without inference. Uses model default effort.':'Default: ' + (provider.defaultModel || 'SDK default') + (provider.id === 'grok' ? ' · Build runtime must be configured' : '');
-    card.append(label, modelLabel, model, note);
-    if(provider.group==='ollama'){$('ollamaGroup').hidden=false;$('ollamaChoices').append(card);}else $('providerChoices').append(card);
-    if($('workflowMode').value==='targeted'&&!provider.defaultModel&&['claude','codex'].includes(provider.id))model.value=provider.id==='claude'?'claude-sonnet-5-5':'gpt-6-astra';
-    const row={id: provider.id, provider: provider.provider || provider.id, defaultModel:provider.defaultModel,modelDiscovery:!!provider.modelDiscovery,requiresInstalledModel:!!provider.requiresInstalledModel,availableModels:[],effortMode:provider.effortMode,toggle,model};
-    if(provider.modelDiscovery){
-      const picker=document.createElement('select');picker.id='models-'+provider.id;picker.setAttribute('aria-label',provider.label+' registered models');
-      const initialOption=viewNode('option','Refresh to list registered models');initialOption.value='';picker.append(initialOption);picker.onchange=()=>{if(picker.value){model.value=picker.value;refresh();}};
-      const button=viewNode('button','Refresh models','secondary');button.type='button';
-      const status=viewNode('small','No model list requested.');status.setAttribute('role','status');
-      row.modelPicker=picker;row.refreshModels=button;row.loadingModels=false;row.modelStatus=status;
-      button.onclick=async()=>{
-        if(busy||row.loadingModels)return;row.loadingModels=true;refresh();status.textContent='Reading Ollama model metadata…';
-        try{const response=await fetch('/api/models?provider='+encodeURIComponent(row.provider));const data=await response.json();if(!response.ok)throw Error(data.error||'Model list unavailable.');
-          showModelChoices(row.provider,data);
-        }catch(error){for(const other of rows.filter(r=>r.provider===row.provider)){other.availableModels=[];if(other.requiresInstalledModel)other.toggle.checked=false;other.modelStatus.textContent=error.message;}}
-        finally{row.loadingModels=false;refresh();}
-      };
-      card.append(picker,button,status);
-    }
-    rows.push(row); toggle.onchange = refresh; model.oninput = refresh;
-  }
+  participantOptions=(health.availableParticipants||health.availableProviders).map(option=>({...option,provider:option.provider||option.id}));
+  providerOptions=[...new Set(participantOptions.map(option=>option.provider))].map(id=>({id,label:health.availableProviders?.find(option=>option.id===id)?.label||participantOptions.find(option=>option.provider===id).label}));
+  const ids=health.agents.filter(id=>participantOptions.some(option=>option.id===id)&&($('workflowMode').value!=='targeted'||participantOptions.find(option=>option.id===id).provider!=='grok')).slice(0,$('workflowMode').value==='targeted'?2:3);
+  while(ids.length<2){const next=participantOptions.find(option=>!ids.includes(option.id)&&($('workflowMode').value!=='targeted'||option.provider!=='grok'));if(!next)break;ids.push(next.id);}
+  setParticipants({providers:ids,models:Object.fromEntries(ids.map(id=>[id,participantOptions.find(option=>option.id===id).defaultModel||($('workflowMode').value==='targeted'?(id==='claude'?'claude-sonnet-5-5':id==='codex'?'gpt-6-astra':''):'')]))});
   ready = true; refresh();
-  if (!inferenceEnabled) $('selectionError').textContent = 'Inference is disabled. Saved discussions can still be reviewed.';
 }).catch(() => { $('providers').textContent = 'Provider configuration unavailable'; refresh(); });
 $('rounds').onchange = refresh;
 $('workflowMode').onchange=refresh;$('author').onchange=refresh;
 $('researchMode').onchange=refresh;
-$('usePair').onclick=()=>{for(const row of rows){row.toggle.checked=['claude','codex'].includes(row.id);if(row.id==='claude')row.model.value='claude-sonnet-5-5';if(row.id==='codex')row.model.value='gpt-6-astra';}$('workflowMode').value='targeted';$('author').value='claude';refresh();};
+$('addParticipant').onclick=()=>{if(!busy&&ready&&$('workflowMode').value!=='targeted'){addParticipant();refresh();}};
+$('usePair').onclick=()=>{if(busy||$('usePair').disabled)return;setParticipants({providers:['codex','claude'],models:{codex:'gpt-6-astra',claude:'claude-sonnet-5-5'}});$('workflowMode').value='targeted';refresh('claude');};
 function finish(status) {
   busy = false; $('status').textContent = status; $('send').disabled = true; $('cancel').disabled = true;
   if (events) events.close(); refresh();
@@ -423,7 +483,8 @@ async function openSaved(id) {
     $('rounds').value = String(s.maxRounds);$('workflowMode').value=s.workflowMode||'discussion';$('author').value=s.targetedConfig?.author||'';$('acceptanceChecks').value=(s.targetedConfig?.checks||[]).join('\n');
     $('researchMode').value=s.research?.mode||(s.workflow?.research.status==='completed'?'wikipedia':'none');
     $('researchQuery').value=s.research?.query||s.workflow?.research.query||'';
-    if (s.selection) for (const row of rows) { row.toggle.checked = s.selection.providers.includes(row.id); row.model.value = s.selection.models[row.id] || ''; }
+    if (s.selection) setParticipants(s.selection);
+    refresh(s.targetedConfig?.author);
     $('calls').textContent = s.calls; $('maxCalls').textContent = s.maxCalls ?? 'Unknown';
     $('cost').textContent = '$' + Number(s.spendKnownUSD).toFixed(4) + (s.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)');
     $('evidence').textContent = s.evidence ? s.evidence.id : 'Idea and optional context';

@@ -80,19 +80,22 @@ npm run start:real -- --enable-inference --ollama-only
 ```
 
 This launcher does not require OpenAI or Claude login. It starts a server, with no
-model prompts until **Start discussion**. Open http://127.0.0.1:3030 and find **Ollama Cloud + Local**. Click
-**Refresh models** to check availability without inference. Local selection is
-disabled until installed models are found; only listed local models can be used.
+model prompts until **Start discussion**. Open http://127.0.0.1:3030 and choose
+**Ollama Local** or **Ollama Cloud** in a participant's **Provider** selector. Click
+**Refresh models** in that row to check availability without inference. Local
+discussions cannot start until installed models are found; only listed local models can be used.
 If none are installed or Ollama is unavailable, choose Cloud or another provider.
-Select two participants and choose models. Each has a
-second slot for another model from that location. Same-provider slots require
-different explicit IDs. The ordinary Codex + Claude launcher also exposes Ollama
+The picker shows two rows, numbered once across all providers. Each row selects
+one provider and model. Both rows may use the same provider with different explicit
+model IDs. Full discussion can add a third row with **Add participant**; targeted
+review uses exactly two. The ordinary Codex + Claude launcher also exposes Ollama
 for mixed selections; `--openai-only` disables it.
 
 **Refresh models** reads only the local registry. Cloud names are daemon model
 names, which can differ from direct cloud API names. If the list is empty, add the
 model through Ollama outside synqo and refresh. Refreshing one local slot updates
-both local slots; removing the last local model clears local selection. If the list is unavailable, check
+all rows currently using Local; a missing model blocks starting a discussion while
+preserving the user's choice. If the list is unavailable, check
 that Ollama is running. If metadata is unsupported or Local/Cloud doesn't match,
 update Ollama or choose the correct location. An authorization error for Cloud
 requires signing in outside synqo; a listed model does not prove entitlement or quota.
