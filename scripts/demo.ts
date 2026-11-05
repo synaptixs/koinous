@@ -25,7 +25,7 @@ if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.u
   const server=createServer(app.handler);
   server.on('error',error=>{console.error(`Demo could not start: ${error.message}. If the port is occupied, set PORT to another local port.`);process.exitCode=1;});
   server.listen(app.port,app.host,()=>{
-   console.log(`Koinous demo: http://${app.host}:${app.port}/?session=${SAMPLE_ID}`);
+   console.log(`Riff demo: http://${app.host}:${app.port}/?session=${SAMPLE_ID}`);
    console.log('Synthetic sample ready in Saved discussions. Mock Codex/Claude selected; mock Ollama choices available; Grok off; live inference disabled. No login or npm install needed.');
   });
   const stop=()=>{server.close();void app.shutdown().finally(()=>server.closeAllConnections());};

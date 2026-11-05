@@ -52,7 +52,7 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
       try{return json(res,200,await ollamaModels(provider,options.ollamaFetch));}
       catch{return json(res,503,{error:'Ollama model list unavailable. Start Ollama and register models, then refresh. No inference was requested.'});}
     }
-    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:isOllama(providerFor(id)),effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
+    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:isOllama(providerFor(id)),group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
     if(req.method==='GET'&&url.pathname==='/api/sessions'){
       const query=historyQuery(url.searchParams);
       const found=saved.list();
@@ -107,7 +107,7 @@ return {engine,handler,shutdown,port,host,mode};
 }
 if(process.argv[1] && pathToFileURL(resolve(process.argv[1])).href===import.meta.url) {
   const app=createApplication();
-  const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`Koinous POC (${app.mode}) at http://${app.host}:${app.port}`));
+  const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`Riff (${app.mode}) at http://${app.host}:${app.port}`));
   let shuttingDown=false;
   const stop=()=>{if(shuttingDown)return;shuttingDown=true;server.close();void app.shutdown().finally(()=>server.closeAllConnections());};
   process.on('SIGINT',stop);process.on('SIGTERM',stop);

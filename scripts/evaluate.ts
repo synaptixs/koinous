@@ -40,7 +40,7 @@ if(command==='grade'){
   if(!authorizationPath)throw Error('Explicit authorization record required before inference');
   const a=json(authorizationPath);
   if(a.protocolHash!==protocolHash||a.maxCalls!==spec.maxCalls||a.authorized!==true||!a.accountEligibilityConfirmed||!a.approvedBy||!a.preflightEvidence)throw Error('Authorization must match exact preflight hash, call cap, eligible accounts and reviewed offline evidence');
-  if(process.env.KOINOUS_ENABLE_INFERENCE!=='1'||process.env.GROK_BUILD_ENABLE_INFERENCE!=='0')throw Error('Live requires explicit Koinous opt-in and Grok off');
+  if(process.env.KOINOUS_ENABLE_INFERENCE!=='1'||process.env.GROK_BUILD_ENABLE_INFERENCE!=='0')throw Error('Live requires explicit Riff opt-in and Grok off');
  }else if(process.env.KOINOUS_ENABLE_INFERENCE!=='0'||process.env.GROK_BUILD_ENABLE_INFERENCE!=='0')throw Error('Offline commands require both inference flags explicitly 0');
  // Pin all execution settings that affect Engine admission/deadlines; no inherited overrides.
  for(const k of ['CODEX_TIMEOUT_MS','CLAUDE_TIMEOUT_MS','MAX_SESSION_TOKENS','MAX_SESSION_USD','CODEX_WORKDIR','CLAUDE_WORKDIR'])if(process.env[k]!==undefined)throw Error(`Unset ${k} for the registered protocol`);

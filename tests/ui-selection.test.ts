@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 class Element {
   tagName=''; id=''; type=''; value=''; checked=false; disabled=false; className=''; htmlFor=''; maxLength=0; placeholder=''; autocomplete=''; href='';
+  hidden=false;
   style={display:''}; children: Element[]=[];
   private ownText='';
   get textContent():string{return this.children.length?this.ownText+this.children.map(c=>c.textContent).join(''):this.ownText;}
@@ -15,8 +16,8 @@ class Element {
   replaceChildren(){this.children=[];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>) {
-  const elements=Object.fromEntries(['stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
-  elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
+  const elements=Object.fromEntries(['ollamaGroup','ollamaChoices','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','providerChoices','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  elements.ollamaGroup.hidden=true;elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
   const streams:FakeEvents[]=[];
   class FakeEvents {
@@ -35,23 +36,49 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const urlGlobals=address?{location:address,history:{replaceState(_state:unknown,_title:string,path:string){address.href=new URL(path,address).href;urlWrites.push(address.href);}}}:{};
   runInNewContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),{document:{getElementById:(id:string)=>elements[id],createElement:(tag:string)=>Object.assign(new Element(),{tagName:tag}),createTextNode:(text:string)=>Object.assign(new Element(),{textContent:text})},fetch,EventSource:FakeEvents,URLSearchParams,...urlGlobals});
   await new Promise(resolve=>setImmediate(resolve));
-  const rows=elements.providerChoices.children.map(card=>({toggle:card.children[0].children[0],model:card.children[2]}));
+  const rows=[...elements.providerChoices.children,...elements.ollamaChoices.children].map(card=>({toggle:card.children[0].children[0],model:card.children[2]}));
   return {elements,rows,requests,streams,historyRequests,address,urlWrites};
 }
-const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
+const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',group:'ollama',requiresInstalledModel:true,defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',group:'ollama',requiresInstalledModel:false,defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
 test('Ollama UI explicitly refreshes metadata, selects models and records default effort',async()=>{
  const metadataRequests:string[]=[];
  const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async url=>{metadataRequests.push(url);return {ok:true,json:async()=>({models:['registered-model'],total:1,source:'mock',truncated:false,unsupported:0})};});
  assert.equal(metadataRequests.length,0);assert.equal(f.elements.run.disabled,true);
- for(const card of f.elements.providerChoices.children){const picker=card.children[4],button=card.children[5];await button.onclick!();picker.value='registered-model';picker.onchange!();assert.match(card.children[6].textContent,/1 of 1 registered models/);}
+ for(const card of f.elements.ollamaChoices.children){const picker=card.children[4],button=card.children[5];await button.onclick!();picker.value='registered-model';picker.onchange!();assert.match(card.children[6].textContent,/1 of 1 registered models/);}
+ f.rows[0].toggle.checked=true;f.rows[0].toggle.onchange!();
  assert.deepEqual(metadataRequests,['/api/models?provider=ollama-local','/api/models?provider=ollama-cloud']);
  f.elements.workflowMode.value='targeted';f.elements.workflowMode.onchange!();assert.match(f.elements.roleNote.textContent,/model default effort/);assert.doesNotMatch(f.elements.roleNote.textContent,/low effort|medium effort/);assert.equal(f.elements.run.disabled,false);
  await f.elements.run.onclick!();assert.equal(f.requests.length,1);assert.deepEqual(f.requests[0].selection,{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'registered-model','ollama-cloud':'registered-model'}});
- assert.ok(f.elements.providerChoices.children.every(card=>card.children[4].disabled&&card.children[5].disabled));
+ assert.ok(f.elements.ollamaChoices.children.every(card=>card.children[4].disabled&&card.children[5].disabled));
 });
 test('Ollama UI reports metadata errors while inference stays disabled',async()=>{
  const f=await setup(false,false,undefined,true,undefined,undefined,ollamaHealth,async()=>({ok:false,json:async()=>({error:'Start Ollama and refresh.'})}));
- const card=f.elements.providerChoices.children[0];await card.children[5].onclick!();assert.equal(card.children[6].textContent,'Start Ollama and refresh.');assert.equal(f.elements.run.disabled,true);assert.equal(f.requests.length,0);
+ const card=f.elements.ollamaChoices.children[0];await card.children[5].onclick!();assert.equal(card.children[6].textContent,'Start Ollama and refresh.');assert.equal(f.elements.run.disabled,true);assert.equal(f.requests.length,0);
+});
+test('Ollama Cloud + Local offers local selection only after installed models are found',async()=>{
+ let calls=0;
+ const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async()=>{calls++;return {ok:true,json:async()=>({models:[],total:0,source:'local-ollama-registry',truncated:false,unsupported:0})};});
+ assert.equal(f.elements.ollamaGroup.hidden,false);assert.equal(f.elements.providerChoices.children.length,0);assert.equal(f.elements.ollamaChoices.children.length,2);
+ assert.equal(f.rows[0].toggle.checked,false);assert.equal(f.rows[0].toggle.disabled,true);assert.equal(f.rows[1].toggle.disabled,false);assert.equal(calls,0);
+ const card=f.elements.ollamaChoices.children[0];await card.children[5].onclick!();
+ assert.equal(calls,1);assert.equal(f.rows[0].toggle.disabled,true);assert.match(card.children[6].textContent,/No local models installed/);assert.equal(f.requests.length,0);
+});
+test('installed-model refresh unlocks both local slots and refuses invented local IDs',async()=>{
+ const health={...ollamaHealth,availableParticipants:[...ollamaHealth.availableParticipants,{...ollamaHealth.availableParticipants[0],id:'ollama-local-2',label:'Ollama Local 2'}]};
+ const f=await setup(false,false,undefined,false,undefined,undefined,health,async()=>({ok:true,json:async()=>({models:['installed:small'],total:1,source:'local-ollama-registry',truncated:false,unsupported:0})}));
+ await f.elements.ollamaChoices.children[0].children[5].onclick!();assert.equal(f.rows[0].toggle.disabled,false);assert.equal(f.rows[2].toggle.disabled,false);
+ f.rows[0].toggle.checked=true;f.rows[0].model.value='invented:model';f.rows[1].model.value='cloud-alias';f.rows[0].toggle.onchange!();
+ assert.equal(f.elements.run.disabled,true);assert.match(f.elements.selectionError.textContent,/model available on this machine/);
+ f.rows[0].model.value='installed:small';f.rows[0].model.oninput!();assert.equal(f.elements.run.disabled,false);assert.equal(f.requests.length,0);
+});
+test('a removed local model or unavailable daemon clears local selection and can recover',async()=>{
+ let state='installed';
+ const f=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async()=>state==='error'?{ok:false,json:async()=>({error:'Ollama is unavailable.'})}:{ok:true,json:async()=>({models:state==='installed'?['installed:small']:[],total:state==='installed'?1:0,source:'local-ollama-registry',truncated:false,unsupported:0})});
+ const card=f.elements.ollamaChoices.children[0];
+ await card.children[5].onclick!();f.rows[0].toggle.checked=true;f.rows[0].toggle.onchange!();
+ state='empty';await card.children[5].onclick!();assert.equal(f.rows[0].toggle.checked,false);assert.equal(f.rows[0].toggle.disabled,true);
+ state='installed';await card.children[5].onclick!();assert.equal(f.rows[0].toggle.disabled,false);
+ f.rows[0].toggle.checked=true;f.rows[0].toggle.onchange!();state='error';await card.children[5].onclick!();assert.equal(f.rows[0].toggle.checked,false);assert.equal(f.rows[0].toggle.disabled,true);assert.equal(f.rows[1].toggle.disabled,false);assert.equal(f.requests.length,0);
 });
 test('saved Ollama selection and accounting reopen without model discovery or inference',async()=>{
  const saved={id:'saved-id',prompt:'Old task',status:'completed',readOnly:true,maxRounds:3,calls:2,spendKnownUSD:0,spendIncomplete:true,workflowMode:'targeted',targetedConfig:{author:'ollama-local',checks:[]},selection:{providers:['ollama-local','ollama-cloud'],models:{'ollama-local':'saved-local','ollama-cloud':'saved-cloud'}},entries:[],tokenAccounting:{knownTotalTokens:120,missingCalls:0,calls:[]}};

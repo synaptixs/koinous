@@ -29,6 +29,51 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Riff branding and Ollama availability — 2026-11-05 (offline)
+
+| Follow-up phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | PKG impact, selection/discovery contracts, branding compatibility | Passed |
+| Implement | 25% | Ollama Cloud + Local section, installed-model local gate, Riff display name | Passed |
+| Verify | 25% | TypeScript, 590 Node + 33 Python tests; mock browser selection | Passed |
+| Document | 25% | Updated branding/setup and compatibility guidance | Passed |
+
+Riff is the working display name, with the tagline "Better ideas together".
+No name preference arrived while the independent Ollama work proceeded, so Riff
+was used as the reversible display choice. Repository/package identifiers,
+`KOINOUS_*` settings, protocol names, historical design records and saved sessions
+retain their existing identifiers. No repository rename or data migration occurs.
+
+The picker groups Ollama under **Ollama Cloud + Local**. Server-owned participant
+metadata declares the group and installed-model requirement; the UI does not infer
+these from filenames. Local slots start disabled until metadata refresh finds
+installed models. Both slots share the refreshed list. Unlisted local IDs cannot
+start a discussion, and removing all models or losing daemon access clears local
+selection. Cloud selection is independent of installed local weights and retains
+the existing signed-in daemon transport. Refresh does not perform inference or
+download models. Reopening saved local discussions still performs no discovery.
+
+Full offline gate passed: TypeScript, 590 Node tests and 33 Python tests. Three
+new UI regressions cover empty/installed lists, invented IDs, shared local slots,
+model removal, unavailable daemon and recovery. Browser mock verification confirmed
+the Riff title, combined section, initial local disablement, shared list refresh
+and Local/Cloud choices without starting a discussion. Gate log:
+`/private/tmp/riff-ollama-check.log`; screenshot outside the checkout:
+`/Users/falcon/projects/collab/deliverables/ollama-selection/riff-picker.png`.
+
+Pre-edit PKG on clean bbd5d29: createApplication18 callers/2 docs; UI refresh13/1;
+UI selection2/1; Ollama metadata request3/0; createProtectedApplication6/1;
+subscription setup6/0; dashboardHtml2/0; evaluate module0/0. No truncation;
+untraced TS/JS calls are not tracked and counts are floors. Regression gaps flag
+server/demo/start-real/secure-server/evaluate and UI entry paths; existing full
+gate, API/UI tests and mock browser exercise the applicable paths. The metadata
+request's qualified regression query was not found; its short-name query reports
+coverage with the server entry gaps above. Raw outputs remain outside the checkout.
+
+Overall stays 48.33%, P6 stays 80%; no inference, login or model downloads occurred.
+Live Ollama behavior and recommendation quality remain unverified. Delivery
+continues in PR #14, preserving the original Ollama iteration below.
+
 ### Ollama selection iteration — 2026-11-04 (offline)
 
 | Ollama iteration phase | Weight | Gate | State |

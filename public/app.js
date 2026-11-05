@@ -67,7 +67,8 @@ function refresh() {
   const reviewer=chosen.providers.find(id=>id!==$('author').value)||'unselected';
   $('roleNote').textContent=targeted?'Author '+$('author').value+' · '+effort($('author').value,'low')+'; reviewer '+reviewer+' · '+effort(reviewer,'medium')+'. Fresh requests; at most three calls.':'Full discussion: participants exchange independent positions over the selected rounds.';
   const missingOllama=selected.some(row=>row.modelDiscovery&&!(row.model.value.trim()||row.defaultModel));
-  const error = targeted&&(chosen.providers.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const unavailableLocal=selected.some(row=>row.requiresInstalledModel&&!row.availableModels.includes(row.model.value.trim()||row.defaultModel));
+  const error = targeted&&(chosen.providers.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
   $('run').disabled = busy || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
@@ -78,7 +79,7 @@ function refresh() {
   for(const id of ['workflowMode','author','acceptanceChecks'])$(id).disabled=busy;
   $('usePair').disabled=busy||!rows.some(r=>r.id==='claude')||!rows.some(r=>r.id==='codex');
   for(const id of ['researchMode','researchQuery']) $(id).disabled = busy;
-  for (const row of rows) { row.toggle.disabled = busy; row.model.disabled = busy || !row.toggle.checked; if(row.modelPicker)row.modelPicker.disabled=busy||!row.toggle.checked; if(row.refreshModels)row.refreshModels.disabled=busy||row.loadingModels; }
+  for (const row of rows) { row.toggle.disabled = busy || (row.requiresInstalledModel&&!row.availableModels.length&&!row.toggle.checked); row.model.disabled = busy || !row.toggle.checked; if(row.modelPicker)row.modelPicker.disabled=busy||!row.toggle.checked; if(row.refreshModels)row.refreshModels.disabled=busy||row.loadingModels; }
   $('plannedCalls').textContent = targeted?3:chosen.providers.length * Number($('rounds').value);
   if (!sessionId) $('maxCalls').textContent = $('plannedCalls').textContent;
   return !error;
@@ -192,6 +193,15 @@ function appendResponse(entry) {
   const raw=node('details',undefined,'response-original');raw.append(node('summary','Original response'),node('pre',original));card.append(raw);
   $('feed').append(card);
 }
+function showModelChoices(provider,data) {
+  for(const row of rows.filter(r=>r.provider===provider)){
+    row.availableModels=[...data.models];
+    row.modelPicker.replaceChildren();const placeholder=viewNode('option','Choose a registered model');placeholder.value='';row.modelPicker.append(placeholder);
+    for(const id of data.models){const option=viewNode('option',id);option.value=id;row.modelPicker.append(option);}
+    if(row.requiresInstalledModel&&!data.models.length)row.toggle.checked=false;
+    row.modelStatus.textContent=(data.source==='mock'?'Demo models. ':'')+data.models.length+' of '+data.total+' registered models'+(data.truncated?' (list truncated)':'')+'. '+(data.unsupported?data.unsupported+' unsupported entries omitted. ':'')+(row.requiresInstalledModel&&!data.models.length?'No local models installed; local selection is unavailable. ':'')+'No inference requested.';
+  }
+}
 const configurationReady = fetch('/api/health').then(async response => {
   if (!response.ok) throw Error('Configuration unavailable');
   const health = await response.json();
@@ -200,27 +210,26 @@ const configurationReady = fetch('/api/health').then(async response => {
   for (const provider of health.availableParticipants || health.availableProviders) {
     const card = document.createElement('div'); card.className = 'choice';
     const label = document.createElement('label');
-    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = health.agents.includes(provider.id)&&($('workflowMode').value!=='targeted'||health.agents.filter(id=>id!=='grok').slice(0,2).includes(provider.id)); toggle.id = 'provider-' + provider.id;
+    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = !provider.requiresInstalledModel&&health.agents.includes(provider.id)&&($('workflowMode').value!=='targeted'||health.agents.filter(id=>id!=='grok').slice(0,2).includes(provider.id)); toggle.id = 'provider-' + provider.id;
     label.append(toggle, document.createTextNode(provider.label));
     const modelLabel = document.createElement('label'); modelLabel.textContent = provider.label + ' model ID'; modelLabel.htmlFor = 'model-' + provider.id;
     const model = document.createElement('input'); model.type = 'text'; model.id = modelLabel.htmlFor; model.maxLength = 128; model.placeholder = provider.defaultModel || (provider.modelDiscovery?'Choose or enter a registered model ID':'SDK default'); model.autocomplete = 'off';
-    const note = document.createElement('small'); note.textContent = provider.modelDiscovery?(provider.provider==='ollama-cloud'?'Cloud processing via signed-in local Ollama.':'Runs on your machine through local Ollama.')+' Refresh lists registered models without inference. Uses model default effort.':'Default: ' + (provider.defaultModel || 'SDK default') + (provider.id === 'grok' ? ' · Build runtime must be configured' : '');
-    card.append(label, modelLabel, model, note); $('providerChoices').append(card);
+    const note = document.createElement('small'); note.textContent = provider.modelDiscovery?(provider.requiresInstalledModel?'Local is available only when a model is installed on this machine.':'Cloud processing via signed-in Ollama.')+' Refresh lists registered models without inference. Uses model default effort.':'Default: ' + (provider.defaultModel || 'SDK default') + (provider.id === 'grok' ? ' · Build runtime must be configured' : '');
+    card.append(label, modelLabel, model, note);
+    if(provider.group==='ollama'){$('ollamaGroup').hidden=false;$('ollamaChoices').append(card);}else $('providerChoices').append(card);
     if($('workflowMode').value==='targeted'&&!provider.defaultModel&&['claude','codex'].includes(provider.id))model.value=provider.id==='claude'?'claude-sonnet-5-5':'gpt-6-astra';
-    const row={id: provider.id, provider: provider.provider || provider.id, defaultModel:provider.defaultModel,modelDiscovery:!!provider.modelDiscovery,effortMode:provider.effortMode,toggle,model};
+    const row={id: provider.id, provider: provider.provider || provider.id, defaultModel:provider.defaultModel,modelDiscovery:!!provider.modelDiscovery,requiresInstalledModel:!!provider.requiresInstalledModel,availableModels:[],effortMode:provider.effortMode,toggle,model};
     if(provider.modelDiscovery){
       const picker=document.createElement('select');picker.id='models-'+provider.id;picker.setAttribute('aria-label',provider.label+' registered models');
       const initialOption=viewNode('option','Refresh to list registered models');initialOption.value='';picker.append(initialOption);picker.onchange=()=>{if(picker.value){model.value=picker.value;refresh();}};
       const button=viewNode('button','Refresh models','secondary');button.type='button';
       const status=viewNode('small','No model list requested.');status.setAttribute('role','status');
-      row.modelPicker=picker;row.refreshModels=button;row.loadingModels=false;
+      row.modelPicker=picker;row.refreshModels=button;row.loadingModels=false;row.modelStatus=status;
       button.onclick=async()=>{
         if(busy||row.loadingModels)return;row.loadingModels=true;refresh();status.textContent='Reading Ollama model metadata…';
         try{const response=await fetch('/api/models?provider='+encodeURIComponent(row.provider));const data=await response.json();if(!response.ok)throw Error(data.error||'Model list unavailable.');
-          picker.replaceChildren();const placeholder=viewNode('option','Choose a registered model');placeholder.value='';picker.append(placeholder);
-          for(const id of data.models){const option=viewNode('option',id);option.value=id;picker.append(option);}
-          status.textContent=(data.source==='mock'?'Demo models. ':'')+data.models.length+' of '+data.total+' registered models'+(data.truncated?' (list truncated)':'')+'. '+(data.unsupported?data.unsupported+' unsupported entries omitted. ':'')+'No inference requested.';
-        }catch(error){status.textContent=error.message;}
+          showModelChoices(row.provider,data);
+        }catch(error){for(const other of rows.filter(r=>r.provider===row.provider)){other.availableModels=[];if(other.requiresInstalledModel)other.toggle.checked=false;other.modelStatus.textContent=error.message;}}
         finally{row.loadingModels=false;refresh();}
       };
       card.append(picker,button,status);

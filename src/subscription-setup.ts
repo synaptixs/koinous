@@ -44,7 +44,7 @@ export async function checkSubscriptions(run:AuthRunner=runAuth){
  return result;
 }
 export async function setup(args:string[],run:AuthRunner=runAuth):Promise<string>{
- if(!args.length)return 'Personal subscription setup (no model calls):\n1. npm ci\n2. npm run setup -- login codex\n3. npm run setup -- login claude\n4. npm run setup -- status\nThen: npm run start:real -- --enable-inference\nSign in with your own ChatGPT and Claude subscription in the browser. Never paste keys into Koinous. Setup does not enable inference.';
+ if(!args.length)return 'Personal subscription setup (no model calls):\n1. npm ci\n2. npm run setup -- login codex\n3. npm run setup -- login claude\n4. npm run setup -- status\nThen: npm run start:real -- --enable-inference\nSign in with your own ChatGPT and Claude subscription in the browser. Never paste keys into Riff. Setup does not enable inference.';
  if(args.length===1&&args[0]==='status'){
   const ready=await checkSubscriptions(run);
   return `Codex subscription login: ${ready.codex?'ready':'not confirmed'}\nClaude subscription login: ${ready.claude?'ready':'not confirmed'}\nLogin state is not a quota or entitlement check. No model call was made.`;

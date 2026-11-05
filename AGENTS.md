@@ -1,4 +1,4 @@
-# Koinous agent guidance
+# Riff agent guidance
 
 ## Progress reporting
 
