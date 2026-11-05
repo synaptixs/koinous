@@ -29,6 +29,32 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Light translucent theme — 2026-11-05 (offline)
+
+The user requested a lighter, possibly translucent UI. The page now uses a pale
+blue/lavender background, frosted white panels, dark slate text and blue controls.
+Recommendation, transcript, tables, notices, peer decisions and original-response
+details use the same light palette. CSS declares a light native control scheme,
+visible keyboard focus, an opaque panel fallback when blur is unavailable and
+solid panels for reduced-transparency preferences. No external assets or new
+dependencies are introduced. Discussion markup, IDs and behavior are unchanged.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Guidance, clean current PR and PKG/CSS ownership | Passed |
+| Implement | 25% | Light palette, translucent panels, readable component states | Passed |
+| Verify | 25% | TypeScript, 611 Node + 33 Python tests; desktop/saved/mobile views | Passed |
+| Document | 25% | Design record and existing branding PR update | Passed |
+
+PKG was consulted first. file_insights reports no function/class nodes in
+public/index.html (zero shown, no truncation); this CSS-only change has no
+callable-symbol blast radius or regression-gap result. Selectors and markup were
+checked directly. Browser inspection covered the initial page, a saved synthetic
+recommendation and its controls, plus the 390px layout (no page-width overflow).
+No new CSS-mirroring tests were added. Full offline gate passes; no model, login
+or live research calls. Existing user server remains untouched. Overall 48.33%
+and P6 80% remain unchanged.
+
 ### Collaborative research branding — 2026-11-05 (offline)
 
 The user selected research/collaboration wording. Browser title, visible heading
