@@ -29,6 +29,48 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Automatic listing of finished sessions — 2026-11-05 (offline)
+
+The server already persists the report and completion event. The UI now responds
+to session.finished by refreshing Saved discussions, selecting the finished record
+and confirming saved automatically in the Session panel and history notice. The
+selected record can be opened read-only without another model call. No manual
+status override or extra model request is introduced; failed, partial and cancelled
+outcomes retain their real status.
+
+Applied history search, filters and page remain intact. If the finished record is
+absent from those results, a Just finished option is added outside the matching
+count with an explicit explanation. A matching record is not duplicated. History
+errors preserve downloads and offer Refresh list; retry retains the pending finished
+record so it becomes selected when the refresh succeeds. New runs wait while
+history loads. Old stream events cannot overwrite another opened record. Connection
+loss never claims confirmed completion; opening history does not trigger the new
+completion path. Persistence, API contracts and legacy records are unchanged.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Canonical persistence/completion contract and PKG impact | Passed |
+| Implement | 25% | Automatic listing, selection, confirmation and honest failure states | Passed |
+| Verify | 25% | TypeScript, 654 Node + 33 Python tests; mock browser/reopen/mobile | Passed |
+| Document | 25% | Guide, design record and reviewable delivery | Passed |
+
+PKG measured on clean 0560a7d before edits: finish3 callers/1 doc,
+loadSavedList7/1 and refresh19/1. Remaining openSaved2/1 and app-module0/1 were
+measured against a clean scratch checkout of the same commit. No truncation;
+JavaScript untraced calls are not tracked, so counts are floors. Regression gaps
+identify addParticipant, finish, loadSavedList, openSaved, setParticipants,
+restoreSavedView and module callbacks; the VM UI tests are not graph-linked. Seven
+new tests cover automatic matched/pinned selection, preserved filters/counts,
+refresh failure/retry, each non-success terminal status, read-only restored data,
+pending-history exclusion and late-event guards.
+
+The full offline gate passes. One synthetic targeted discussion completed two mock
+adapter calls; its new history option appeared and was selected without pressing
+Refresh list. Opening it retained the recorded two calls and restored the read-only
+view. A 390px view has no page-width overflow. Owned temporary preview/storage and
+clean baseline worktree were isolated from the user's running server. No real model,
+login, research or provider metadata call ran. Overall 48.33% and P6 80% unchanged.
+
 ### Explicit model dropdowns — 2026-11-05 (no inference)
 
 The user confirmed web UI dropdowns with no model preselected. Each participant
