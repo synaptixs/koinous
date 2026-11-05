@@ -19,10 +19,10 @@ class Element {
   append(...children:Element[]){this.children.push(...children);}
   replaceChildren(...children:Element[]){this.children=[...children];this.ownText='';}
 }
-async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>) {
+async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,fixtureChoices=true) {
   const elements=Object.fromEntries(['workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
   elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
-  const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[];
+  const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[],modelRequests:string[]=[];
   const streams:FakeEvents[]=[];
   class FakeEvents {
     onmessage?:(e:{data:string})=>void; onerror?:()=>void; closed=false;
@@ -30,7 +30,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   }
   const fetch=async(url:string,options?:{body?:string})=>{
     if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}],...healthOverride})};
-    if(url.startsWith('/api/models?')&&modelFetch)return modelFetch(url);
+    if(url.startsWith('/api/models?')){modelRequests.push(url);if(modelFetch)return modelFetch(url);const provider=new URLSearchParams(url.split('?')[1]).get('provider');return {ok:true,json:async()=>({provider,models:provider==='codex'?['codex-default','codex-second']:['claude-fixture','claude-second'],labels:{},total:2,truncated:false,source:'test-catalog',availabilityVerified:false,inferencePerformed:false})};}
     if(url.startsWith('/api/sessions?')&&!options){historyRequests.push(url);if(historyFetch)return historyFetch(url);return {ok:true,json:async()=>({sessions:saved?[{id:saved.id,prompt:saved.prompt,status:saved.status,createdAt:'2026-11-01'}]:[],total:saved?1:0,discoveredTotal:saved?1:0,unavailable:0,truncated:false,scanTruncated:false,page:1,pageSize:50,totalPages:1,q:'',hasPrevious:false,hasNext:false})};}
     if(url==='/api/sessions/saved-id'&&!options)return {ok:true,json:async()=>saved};
     requests.push({url,...JSON.parse(options?.body||'{}')});
@@ -40,13 +40,48 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const urlGlobals=address?{location:address,history:{replaceState(_state:unknown,_title:string,path:string){address.href=new URL(path,address).href;urlWrites.push(address.href);}}}:{};
   runInNewContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),{document:{getElementById:(id:string)=>elements[id],createElement:(tag:string)=>Object.assign(new Element(),{tagName:tag}),createTextNode:(text:string)=>Object.assign(new Element(),{textContent:text})},fetch,EventSource:FakeEvents,URLSearchParams,...urlGlobals});
   await new Promise(resolve=>setImmediate(resolve));
-  return {elements,get rows(){return elements.participantChoices.children.map(card=>({card,title:card.children[0],provider:card.children[2],model:card.children[4],discovery:card.children[6],picker:card.children[6].children[1],refreshModels:card.children[6].children[2],modelStatus:card.children[6].children[3],cloudHelp:card.children[6].children[4],cloudHint:card.children[6].children[4].children[1],commands:card.children[6].children[4].children[2],remove:card.children[7]}));},requests,streams,historyRequests,address,urlWrites};
+  const ui={elements,get rows(){return elements.participantChoices.children.map(card=>({card,title:card.children[0],provider:card.children[2],model:card.children[4],discovery:card.children[6],picker:card.children[6].children[1],refreshModels:card.children[6].children[2],modelStatus:card.children[6].children[3],cloudHelp:card.children[6].children[4],cloudHint:card.children[6].children[4].children[1],commands:card.children[6].children[4].children[2],remove:card.children[7],customButton:card.children[8]}));},requests,streams,historyRequests,modelRequests,address,urlWrites};
+  // Unrelated interaction tests explicitly enter synthetic user choices. Dedicated
+  // picker tests disable this fixture action to inspect the real blank initial UI.
+  if(fixtureChoices&&new Set(ui.rows.map(row=>row.provider.value)).size===ui.rows.length)for(const row of ui.rows)if(['codex','claude'].includes(row.provider.value)){await row.customButton.onclick!();row.model.value=row.provider.value==='codex'?'codex-default':'claude-fixture';row.model.oninput!();}
+  return ui;
 }
 const ollamaHealth={agents:['ollama-local','ollama-cloud'],availableParticipants:[{id:'ollama-local',provider:'ollama-local',label:'Ollama Local',group:'ollama',requiresInstalledModel:true,defaultModel:'',modelDiscovery:true,effortMode:'model-default'},{id:'ollama-cloud',provider:'ollama-cloud',label:'Ollama Cloud',group:'ollama',requiresInstalledModel:false,defaultModel:'',modelDiscovery:true,effortMode:'model-default'}]};
 const mixedHealth={agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:''},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'ollama-local',label:'Ollama Local',defaultModel:''},{id:'ollama-cloud',label:'Ollama Cloud',defaultModel:''}],availableParticipants:[{id:'codex',provider:'codex',label:'OpenAI · Participant 1',defaultModel:''},{id:'codex-2',provider:'codex',label:'OpenAI · Participant 2',defaultModel:''},{id:'claude',provider:'claude',label:'Claude · Participant 1',defaultModel:''},{id:'claude-2',provider:'claude',label:'Claude · Participant 2',defaultModel:''},...ollamaHealth.availableParticipants,{...ollamaHealth.availableParticipants[0],id:'ollama-local-2'},{...ollamaHealth.availableParticipants[1],id:'ollama-cloud-2'}]};
 const noRevision={author:'claude',reviewer:'codex',complete:true,revision:'not-needed',reason:'No material findings.',draft:{recommendation:'Pilot.'},final:null,review:{findings:[]},responses:[],changedFields:[]};
 const setupGuidance={endpoint:'http://127.0.0.1:11434',catalogUrl:'https://ollama.com/search?c=cloud',docsUrl:'https://docs.ollama.com/cloud',signInCommand:"OLLAMA_HOST='http://127.0.0.1:11434' ollama signin",listCommand:"OLLAMA_HOST='http://127.0.0.1:11434' ollama ls",examples:['starter:a-cloud','starter:b-cloud'].map(model=>({model,label:model,url:'https://ollama.com/library/'+model,registerCommand:"OLLAMA_HOST='http://127.0.0.1:11434' ollama pull "+model}))};
 const cloudOnlyHealth={agents:['ollama-cloud','ollama-cloud-2'],availableProviders:[mixedHealth.availableProviders[3]],availableParticipants:[ollamaHealth.availableParticipants[1],{...ollamaHealth.availableParticipants[1],id:'ollama-cloud-2'}],ollamaCloudSetup:setupGuidance};
+test('model dropdowns start blank, loading never selects a model, and clearing a choice blocks defaults',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{},undefined,false),e=ui.elements;
+ assert.ok(ui.rows.every(row=>row.model.value===''&&row.picker.value===''&&row.model.hidden));assert.equal(e.run.disabled,true);assert.equal(ui.modelRequests.length,0);
+ for(const row of ui.rows){await row.refreshModels.onclick!();assert.equal(row.model.value,'');assert.equal(row.picker.value,'');assert.match(row.modelStatus.textContent,/Account access is not verified/);}
+ assert.equal(ui.requests.length,0);assert.equal(ui.streams.length,0);assert.equal(e.run.disabled,true);
+ ui.rows[0].picker.value='codex-second';ui.rows[0].picker.onchange!();assert.equal(e.run.disabled,true);
+ ui.rows[1].picker.value='claude-second';ui.rows[1].picker.onchange!();assert.equal(e.run.disabled,false);
+ ui.rows[0].picker.value='';ui.rows[0].picker.onchange!();assert.equal(ui.rows[0].model.value,'');assert.equal(e.run.disabled,true);
+ await e.run.onclick!();assert.equal(ui.requests.length,0);
+});
+test('switching provider clears the model and shares catalog choices across same-provider rows',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth,undefined,false);
+ ui.rows[0].model.value='old-choice';ui.rows[0].model.oninput!();ui.rows[0].provider.value='claude';ui.rows[0].provider.onchange!();assert.equal(ui.rows[0].model.value,'');
+ await ui.rows[0].refreshModels.onclick!();assert.ok(ui.rows.every(row=>row.picker.children.some(option=>option.value==='claude-second')));assert.ok(ui.rows.every(row=>row.model.value===''));
+ ui.rows[0].picker.value='claude-fixture';ui.rows[0].picker.onchange!();ui.rows[1].picker.value='claude-second';ui.rows[1].picker.onchange!();
+ await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['claude-2','claude'],models:{'claude-2':'claude-fixture',claude:'claude-second'}});
+});
+test('failed model discovery leaves choices empty and custom model entry is an explicit user action',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{},async()=>({ok:false,json:async()=>({error:'Catalog unavailable'})}),false);
+ await ui.rows[0].refreshModels.onclick!();assert.equal(ui.rows[0].model.value,'');assert.equal(ui.rows[0].model.hidden,true);assert.match(ui.rows[0].modelStatus.textContent,/Catalog unavailable/);assert.equal(ui.requests.length,0);
+ await ui.rows[0].customButton.onclick!();assert.equal(ui.rows[0].model.hidden,false);assert.equal(ui.rows[0].model.value,'');ui.rows[0].model.value='explicit-custom';ui.rows[0].model.oninput!();assert.equal(ui.rows[0].picker.value,'explicit-custom');assert.equal(ui.elements.run.disabled,true);
+});
+test('legacy blank-model saved sessions remain readable without catalog startup or an implicit new model',async()=>{
+ const saved={id:'saved-id',prompt:'Legacy default model',status:'completed',readOnly:true,maxRounds:1,calls:2,spendKnownUSD:0,selection:{providers:['codex','claude'],models:{codex:'',claude:''}},entries:[{agent:'codex',round:1,text:'Original response'}]};
+ const ui=await setup(false,false,saved,false,undefined,undefined,{},undefined,false);ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();
+ assert.match(ui.elements.feed.textContent,/Original response/);assert.ok(ui.rows.every(row=>row.model.value===''));assert.equal(ui.elements.run.disabled,true);assert.equal(ui.modelRequests.length,0);assert.equal(ui.requests.length,0);assert.equal(ui.streams.length,0);
+});
+test('catalog labels remain literal and partial catalog coverage stays explicit',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{},async()=>({ok:true,json:async()=>({models:['model-a'],labels:{'model-a':'<img src=x onerror=alert(1)>'},total:null,truncated:true,omitted:1,source:'codex-cli-catalog'})}),false);
+ await ui.rows[0].refreshModels.onclick!();assert.ok(ui.rows[0].picker.textContent.includes('<img src=x'));assert.match(ui.rows[0].modelStatus.textContent,/total unknown.*truncated.*unsupported/);assert.equal(ui.rows[0].model.value,'');assert.ok(!ui.rows[0].picker.children.some(option=>option.tagName==='img'));
+});
 test('cloud examples display per-model registration help and require registry confirmation before dispatch',async()=>{
  let registered=false,metadataCalls=0;
  const ui=await setup(false,false,undefined,false,undefined,undefined,cloudOnlyHealth,async()=>{metadataCalls++;return {ok:true,json:async()=>({models:registered?setupGuidance.examples.map(example=>example.model):[],total:registered?2:0,source:'local-ollama-registry'})};});
@@ -118,7 +153,7 @@ test('one participant list numbers rows globally and offers Ollama in the same p
  for(const [index,row] of ui.rows.entries()){
   assert.equal(row.title.textContent,'Participant '+(index+1));assert.equal(row.provider.attributes['aria-label'],'Participant '+(index+1)+' provider');
   assert.deepEqual(row.provider.children.map(option=>option.textContent),['Choose provider','OpenAI Codex','Anthropic Claude','Ollama Local','Ollama Cloud']);
-  assert.equal(row.discovery.hidden,true);
+  assert.equal(row.discovery.hidden,false);
  }
  ui.rows[1].provider.value='ollama-cloud';ui.rows[1].provider.onchange!();ui.rows[1].model.value='cloud:model';ui.rows[0].model.value='astra';ui.rows[0].model.oninput!();
  assert.equal(ui.rows.length,2);assert.equal(ui.rows[1].discovery.hidden,false);
@@ -150,7 +185,7 @@ test('late Ollama metadata cannot overwrite a participant switched to another pr
  const row=ui.rows[0];row.provider.value='ollama-local';row.provider.onchange!();const pending=row.refreshModels.onclick!();
  row.provider.value='codex';row.provider.onchange!();row.model.value='kept-model';row.model.oninput!();
  complete({ok:true,json:async()=>({models:['local:model'],total:1,source:'local-ollama-registry'})});await pending;
- assert.equal(row.provider.value,'codex');assert.equal(row.model.value,'kept-model');assert.equal(row.discovery.hidden,true);assert.equal(row.modelStatus.textContent,'No model list requested.');assert.equal(ui.requests.length,0);
+ assert.equal(row.provider.value,'codex');assert.equal(row.model.value,'kept-model');assert.equal(row.discovery.hidden,false);assert.equal(row.modelStatus.textContent,'No model list requested.');assert.equal(ui.requests.length,0);
 });
 test('saved author is selected after its new participant options exist in the DOM',async()=>{
  const saved={id:'saved-id',prompt:'Saved author',maxRounds:3,status:'completed',readOnly:true,calls:2,spendKnownUSD:0,workflowMode:'targeted',targetedConfig:{author:'codex-2',checks:[]},selection:{providers:['codex-2','claude'],models:{'codex-2':'saved-author',claude:'saved-reviewer'}},entries:[]};
@@ -234,17 +269,17 @@ test('saved Ollama selection and accounting reopen without model discovery or in
 });
 test('UI hydrates only participating rows and requires a provider and valid model for every row',async()=>{
  const {elements,rows,requests}=await setup();
- assert.equal(rows.length,2);assert.equal(rows[0].model.placeholder,'codex-default');assert.equal(rows[0].title.textContent,'Participant 1');assert.equal(rows[1].title.textContent,'Participant 2');
+ assert.equal(rows.length,2);assert.equal(rows[0].model.placeholder,'Enter an explicit model ID');assert.equal(rows[0].title.textContent,'Participant 1');assert.equal(rows[1].title.textContent,'Participant 2');
  assert.equal(elements.run.disabled,false);assert.equal(elements.maxCalls.textContent,6);
  rows[1].provider.value='';rows[1].provider.onchange!();assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/available provider/);
  await elements.run.onclick!();assert.equal(requests.length,0);
- rows[1].provider.value='grok';rows[1].provider.onchange!();assert.equal(elements.run.disabled,false);assert.equal(rows[1].model.disabled,false);
+ rows[1].provider.value='grok';rows[1].provider.onchange!();rows[1].model.value='grok-4.7';rows[1].model.oninput!();assert.equal(elements.run.disabled,false);assert.equal(rows[1].model.disabled,false);
  rows[1].model.value='--bad';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);
 });
 test('UI sends only selected models, freezes running controls, handles completion and preserves user choices',async()=>{
  const ui=await setup();const {elements,rows,requests,streams}=ui;rows[0].model.value=' chosen-model ';
  await elements.run.onclick!();
- assert.deepEqual(requests[0].selection,{providers:['codex','claude'],models:{codex:'chosen-model',claude:''}});
+ assert.deepEqual(requests[0].selection,{providers:['codex','claude'],models:{codex:'chosen-model',claude:'claude-fixture'}});
  assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.provider.disabled&&row.model.disabled));assert.equal(elements.addParticipant.disabled,true);
  await elements.run.onclick!();assert.equal(requests.length,1);
  streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',spendKnownUSD:0.01,spendIncomplete:true})});
@@ -463,7 +498,7 @@ test('recommendation sections retain dissent and unsupported checks in labeled d
 test('OpenAI-only UI requires two distinct models, posts both slots and reopens both originals',async()=>{
  const health={agents:['codex','codex-2'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:''}],availableParticipants:[{id:'codex',provider:'codex',label:'OpenAI · Participant 1',defaultModel:''},{id:'codex-2',provider:'codex',label:'OpenAI · Participant 2',defaultModel:''}]};
  const {elements,rows,requests}=await setup(false,false,undefined,false,undefined,undefined,health);
- assert.equal(rows.length,2);assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/different model IDs/);
+ assert.equal(rows.length,2);assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/Choose a model/);
  rows[0].model.value='model-a';rows[1].model.value='model-a';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);
  rows[1].model.value='model-b';rows[1].model.oninput!();assert.equal(elements.run.disabled,false);assert.equal(elements.plannedCalls.textContent,6);
  await elements.run.onclick!();assert.deepEqual(requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}});

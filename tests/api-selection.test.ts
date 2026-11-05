@@ -7,12 +7,13 @@ import {Readable} from 'node:stream';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {createApplication} from '../src/server.ts';
 import type {ParticipantId} from '../src/participants.ts';
+import type {CatalogProvider,ModelCatalog} from '../src/model-catalog.ts';
 process.env.EVIDENCE_FILE=new URL('../examples/demo-evidence.json',import.meta.url).pathname;
 delete process.env.MCP_SERVER_URL;
-function setup(t:test.TestContext,real=false) {
+function setup(t:test.TestContext,real=false,modelCatalog?:(provider:CatalogProvider)=>Promise<ModelCatalog>) {
  const outputDir=mkdtempSync(join(tmpdir(),'koinous-api-'));t.after(()=>rmSync(outputDir,{recursive:true,force:true}));
  const invocations:Array<{id:ParticipantId;model:string|undefined;prompt:string;round:number}>=[];
- const app=createApplication({mode:real?'real':'mock',outputDir,defaults:{providers:['codex','claude'],models:{codex:'default-codex',claude:'',grok:'grok-4.7'}},...(real?{}:{adapterFactory:(_mode:string,ids:readonly ParticipantId[]=[],models:Partial<Record<ParticipantId,string>>={})=>ids.map(id=>({id,async run(prompt:string,round:1|2|3){invocations.push({id,model:models[id],prompt,round});await Promise.resolve();return {text:`${id} ${models[id]} round ${round}`,requestedModel:models[id]||undefined,usage:{usd:id==='codex'?null:0.01}};}}))})});
+ const app=createApplication({mode:real?'real':'mock',outputDir,modelCatalog,defaults:{providers:['codex','claude'],models:{codex:'default-codex',claude:'',grok:'grok-4.7'}},...(real?{}:{adapterFactory:(_mode:string,ids:readonly ParticipantId[]=[],models:Partial<Record<ParticipantId,string>>={})=>ids.map(id=>({id,async run(prompt:string,round:1|2|3){invocations.push({id,model:models[id],prompt,round});await Promise.resolve();return {text:`${id} ${models[id]} round ${round}`,requestedModel:models[id]||undefined,usage:{usd:id==='codex'?null:0.01}};}}))})});
  async function request(path:string,method='GET',body?:unknown,origin?:string) {
   const req=Object.assign(Readable.from(body===undefined?[]:[JSON.stringify(body)]),{url:path,method,headers:origin?{origin}:{}});
   let status=0,text='';let headers:Record<string,string>={};
@@ -30,6 +31,16 @@ test('API rejects invalid selections and authentication overrides before creatin
  }
  assert.equal(app.engine.sessions.size,0);assert.equal(invocations.length,0);
  assert.equal((await request('/api/sessions','POST',{prompt:'Synthetic'},'https://untrusted.invalid')).status,403);
+});
+test('provider catalogs are read-only and mock catalogs never launch provider metadata processes',async t=>{
+ let metadataCalls=0;const catalog=async(provider:CatalogProvider):Promise<ModelCatalog>=>{metadataCalls++;return {provider,models:['explicit-a','explicit-b'],labels:{'explicit-a':'A'},total:2,truncated:false,omitted:0,source:provider+'-cli-catalog',availabilityVerified:false,inferencePerformed:false};};
+ const real=setup(t,true,catalog);for(const provider of ['codex','claude']){const response=await real.request('/api/models?provider='+provider);assert.equal(response.status,200);assert.deepEqual(response.json().models,['explicit-a','explicit-b']);assert.equal(response.json().availabilityVerified,false);}
+ assert.equal(metadataCalls,2);assert.equal(real.app.engine.sessions.size,0);const mock=setup(t,false,catalog);assert.equal((await mock.request('/api/models?provider=codex')).json().source,'mock');assert.equal(metadataCalls,2);assert.equal(mock.invocations.length,0);
+});
+test('catalog failures are sanitized and disabled providers cannot invoke discovery',async t=>{
+ let calls=0;const {request,app}=setup(t,true,async()=>{calls++;throw Error('private-provider-token');});const failed=await request('/api/models?provider=claude');assert.equal(failed.status,503);assert.doesNotMatch(failed.text,/private-provider-token/);
+ const before=process.env.KOINOUS_DISABLED_PROVIDERS;process.env.KOINOUS_DISABLED_PROVIDERS='codex';t.after(()=>{if(before===undefined)delete process.env.KOINOUS_DISABLED_PROVIDERS;else process.env.KOINOUS_DISABLED_PROVIDERS=before;});
+ assert.equal((await request('/api/models?provider=codex')).status,400);assert.equal(calls,1);assert.equal(app.engine.sessions.size,0);
 });
 test('health reports optional research availability and enterprise account eligibility without exposing search credentials',async t=>{
  const before=process.env.BRAVE_SEARCH_API_KEY;process.env.BRAVE_SEARCH_API_KEY='synthetic-search-secret';t.after(()=>{if(before===undefined)delete process.env.BRAVE_SEARCH_API_KEY;else process.env.BRAVE_SEARCH_API_KEY=before;});

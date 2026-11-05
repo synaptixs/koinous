@@ -29,6 +29,59 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Explicit model dropdowns — 2026-11-05 (no inference)
+
+The user confirmed web UI dropdowns with no model preselected. Each participant
+now has a model list. OpenAI/Claude lists load only on the user's Load models or
+Refresh models action; loading never picks an entry. Provider changes clear the
+model. Blank models block new UI discussions, including when server defaults are
+configured. A custom-ID field appears only on explicit request. Saved records keep
+their recorded IDs; old blank-model records remain readable without provider startup.
+The selection API's historical defaults remain compatible. The existing pair preset
+still requires its own explicit click. Ollama's registered/setup distinctions remain.
+
+OpenAI uses the pinned app-server initialize/model/list protocol; Claude uses the
+pinned CLI's initialize control response. Neither sends a task, thread, turn, user
+message or model probe. Discovery runs in a private temporary working directory
+with stripped environment, account authentication, hooks/tools/MCP disabled, bounded
+output and time, no retries, sanitized failures and owned-process cleanup. Mock
+mode never starts a provider. Disabled providers are rejected before discovery;
+tenant-scoped routes continue to deny access to personal catalogs/daemons. Grok's
+list contains only its configured explicit ID, not an invented upstream catalog.
+
+Provider catalogs do not verify account entitlement. Counts, omitted entries and
+truncation are reported; a remaining OpenAI cursor makes the total unknown rather
+than implying completeness. IDs and labels come from provider metadata and render
+as literal text. No new dependencies, credential parsing or API-key fallback.
+Official contracts: [OpenAI app server](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
+and [Claude SDK initialization](https://code.claude.com/docs/en/agent-sdk/typescript).
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Explicit scope, metadata contracts and measured PKG impact | Passed |
+| Implement | 25% | Catalogs, dropdowns, empty choices and compatibility | Passed |
+| Verify | 25% | TypeScript, 647 Node + 33 Python tests; browser desktop/mobile | Passed |
+| Document | 25% | Guides, design record and reviewable delivery | Passed |
+
+PKG measured before editing clean 0c6a5b5 (callers/docs): createApplication19/2,
+refresh17/1, configureParticipant2/1, addParticipant3/1, showModelChoices2/1,
+populateModelPicker3/1 and setParticipants3/1. No truncation; TS/JS untraced calls
+are not tracked, so counts are floors. Regression gaps identify
+server/demo/start-real/secure-server plus UI setParticipants/openSaved/
+restoreSavedView/module callbacks. New tests cover both metadata protocols,
+no-prompt dispatch, environment/process/temp cleanup, time/output/error bounds,
+mock/disabled-provider isolation, explicit selection/clearing, same-provider choices,
+late results, custom IDs, literal labels, partial totals and historical blank models.
+
+Read-only checks of the actual pinned CLIs returned 9 OpenAI and 12 Claude entries;
+this proves metadata protocol compatibility, not model access. Browser checks used
+those captured catalogs on an isolated inference-disabled preview: both choices
+stay empty after loading, explicit selection survives refresh, clearing blocks
+dispatch, custom entry works with native DOM collections, and the 390px page has
+no width overflow. The final full offline gate passes. No model prompt, login,
+registration, pull, live research or inference ran. The user's running server was
+untouched. Overall 48.33% and P6 80% remain unchanged.
+
 ### Ollama Cloud choices and registration help — 2026-11-05 (offline)
 
 The user reported an empty Cloud model picker without setup guidance. A read-only

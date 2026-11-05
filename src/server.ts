@@ -1,5 +1,7 @@
 import {researchAvailability} from './research.ts';
 import {ollamaCloudSetup} from './ollama-setup.ts';
+import {providerModelCatalog} from './model-catalog.ts';
+import type {CatalogProvider,ModelCatalog} from './model-catalog.ts';
 import {tokenAccounting} from './token-accounting.ts';
 import {ollamaModels,isOllama} from './ollama.ts';
 import {PARTICIPANTS,providerFor} from './participants.ts';
@@ -19,7 +21,7 @@ import {enabledProviders,assertProvidersEnabled} from './provider-config.ts';
 import {usageSummary} from './provider-runtime.ts';
 import {boundedInt,makeReport,originalMarkdown,PROVIDER_LABELS} from './core.ts';
 
-export function createApplication(options: {mode?: string; outputDir?: string; defaults?: Selection; port?: number; adapterFactory?: typeof createAdapters; ollamaFetch?:typeof fetch} = {}) {
+export function createApplication(options: {mode?: string; outputDir?: string; defaults?: Selection; port?: number; adapterFactory?: typeof createAdapters; ollamaFetch?:typeof fetch;modelCatalog?:(provider:CatalogProvider)=>Promise<ModelCatalog>} = {}) {
 const port=options.port ?? boundedInt(process.env.PORT,3030,1,65535);
 const host='127.0.0.1';
 const mode=options.mode || process.env.MODE || 'mock';
@@ -48,13 +50,20 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
     if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(script);}
     if(req.method==='GET'&&url.pathname==='/api/models'){
       const provider=url.searchParams.get('provider')||'';
-      if(!isOllama(provider)||!enabledProviders().includes(provider))return json(res,400,{error:'Choose an enabled Ollama provider'});
+      if(!['codex','claude','grok','ollama-local','ollama-cloud'].includes(provider)||!enabledProviders().includes(provider as import('./core.ts').AgentId))return json(res,400,{error:'Choose an enabled provider'});
+      if(provider==='codex'||provider==='claude'){
+        if(mode==='mock')return json(res,200,{provider,models:[`mock-${provider}-a`,`mock-${provider}-b`],labels:{},total:2,truncated:false,omitted:0,source:'mock',availabilityVerified:false,inferencePerformed:false});
+        try{return json(res,200,await (options.modelCatalog??providerModelCatalog)(provider));}
+        catch{return json(res,503,{error:'Model catalog unavailable. Check the provider login, then Refresh models. No prompt was sent.'});}
+      }
+      if(provider==='grok'){const model=defaults.models.grok;return json(res,200,{provider,models:model?[model]:[],labels:{},total:model?1:0,truncated:false,source:'server-configuration',availabilityVerified:false,inferencePerformed:false});}
+      if(!isOllama(provider))return json(res,400,{error:'Choose an enabled provider'});
       // Explicit metadata refresh only; mock mode must not touch a real daemon.
       if(mode==='mock')return json(res,200,{provider,models:provider==='ollama-local'?['demo-local:small','demo-local:large']:['demo-cloud:small','demo-cloud:large'],total:2,truncated:false,unsupported:0,source:'mock',inferencePerformed:false});
       try{return json(res,200,await ollamaModels(provider,options.ollamaFetch));}
       catch{return json(res,503,{error:'Ollama model list unavailable. Start Ollama and register models, then refresh. No inference was requested.'});}
     }
-    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,research:researchAvailability(),...(enabledProviders().includes('ollama-cloud')?{ollamaCloudSetup:ollamaCloudSetup()}:{}),providerAccountTypes:['personal','enterprise'],workspaceVerified:false,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:isOllama(providerFor(id)),group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
+    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,research:researchAvailability(),...(enabledProviders().includes('ollama-cloud')?{ollamaCloudSetup:ollamaCloudSetup()}:{}),providerAccountTypes:['personal','enterprise'],workspaceVerified:false,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:true,group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
     if(req.method==='GET'&&url.pathname==='/api/sessions'){
       const query=historyQuery(url.searchParams);
       const found=saved.list();

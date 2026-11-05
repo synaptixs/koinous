@@ -11,6 +11,7 @@
   --subtle:#eef3fb;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;padding:32px 24px;min-height:100vh;background:radial-gradient(ellipse at 8% 4%,#d1e7ffb3,transparent 45%),radial-gradient(ellipse at 93% 22%,#e6dcf7b3,transparent 42%),radial-gradient(ellipse at 45% 92%,#d5eee68c,transparent 48%),#f1f5fa;background-attachment:fixed}
 main{max-width:1160px;margin:auto}
 header{margin-bottom:24px;padding:8px 4px 12px}
@@ -199,7 +200,7 @@ fieldset{margin:16px 0;min-width:0}
     <input id="researchQuery" maxlength="300" aria-label="Public research keywords" placeholder="Public topic keywords, e.g. four-day workweek">
     <p class="filter-hint">Optional research sends only these keywords to the selected services: Wikipedia article introductions and/or web-search snippets, up to five results each. Full web pages are not fetched. Avoid private information. Selected-source failure stops before model calls; results are shared with all participants.</p>
   </section>
-  <fieldset id="selection"><legend>Participants and models</legend><p>Targeted review needs exactly two OpenAI, Claude or Ollama participants. Full discussion supports two or three. Choose a provider and model for each participant. Two models can use the same provider. OpenAI/Claude use personal or enterprise provider accounts, including provider-managed SSO where required; local Ollama needs no login. No API-key fallback.</p><div id="participantChoices" class="choices"></div><button id="addParticipant" class="secondary" type="button">Add participant</button><small>Leave model ID blank to use the displayed default. For two models from one provider, enter different model IDs. Availability depends on your account and organization permissions.</small></fieldset>
+  <fieldset id="selection"><legend>Participants and models</legend><p>Targeted review needs exactly two OpenAI, Claude or Ollama participants. Full discussion supports two or three. Choose a provider and model for each participant. Two models can use the same provider. OpenAI/Claude use personal or enterprise provider accounts, including provider-managed SSO where required; local Ollama needs no login. No API-key fallback.</p><div id="participantChoices" class="choices"></div><button id="addParticipant" class="secondary" type="button">Add participant</button><small>Choose a model for every participant. No model is selected automatically. Two models from the same provider must differ. Catalog entries do not verify account access.</small></fieldset>
   <p id="selectionError" role="status" aria-live="polite">Loading provider configuration…</p>
   <div class="row"><label for="rounds">Maximum rounds</label><select id="rounds"><option>3</option><option>2</option><option>1</option></select><button id="run" disabled>Start discussion</button><small>Up to <span id="plannedCalls">—</span> calls</small></div>
 </section>

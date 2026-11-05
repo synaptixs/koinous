@@ -77,8 +77,9 @@ checks provider account login, and opens missing provider sign-in flows when nee
 
 1. Complete any browser sign-in with the intended account.
 2. Open the localhost URL printed in the terminal.
-3. Select models available to your accounts. In OpenAI-only mode, enter
-   **two different model IDs**, one for each participant.
+3. In each participant row, click **Load models**, then choose from the **Model**
+   dropdown. No model is preselected; starting requires a choice for every row.
+   In OpenAI-only mode, choose **two different model IDs**.
 4. Enter your idea and optional context. Keep **Draft + targeted review**; choose
    the author or use the **Sonnet 5.5 + Astra** preset, then select **Start discussion**.
 5. Review the findings, recorded changes, token accounting and downloadable reports.
@@ -88,6 +89,11 @@ account allowance. Grok stays off in both launchers. Stop with **Ctrl+C**.
 
 - Sign in with a **personal or enterprise OpenAI/Claude account**, including provider-managed SSO when required; model API-key fallback remains disabled.
 - Login status does not establish model entitlement, remaining quota, or corporate workspace selection.
+- **Load models** reads the pinned provider CLI's catalog without sending a prompt.
+  The catalog can include models your account cannot use. **Refresh models** updates
+  it without changing your choice. Use **Enter a custom model ID** for an explicit
+  account-specific ID absent from the catalog. The UI never fills a blank model
+  from an SDK/server default; historical saved discussions remain readable.
 - Different requested model IDs can be aliases; distinct underlying models are not guaranteed.
 - Missing cost information stays **unknown**, rather than being treated as zero or an invoice.
 
@@ -97,7 +103,7 @@ for account setup and manual controls. Advanced Grok runtime instructions are in
 
 ### Ollama Cloud + Local
 
-Each participant has one row with a **Provider** and **Model ID**. Choose
+Each participant has one row with a **Provider** and a model dropdown. Choose
 **Ollama Cloud** or **Ollama Local** in the same provider selector as OpenAI and Claude.
 Both Ollama locations use
 your local Ollama app/API. Local models run on your machine; Cloud sends prompts to
