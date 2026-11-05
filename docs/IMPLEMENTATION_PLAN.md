@@ -29,6 +29,29 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### User-selected name: synqo — 2026-11-05 (offline)
+
+The user selected **synqo**, superseding the provisional Riff display name below.
+UI/title, login, setup messages, new report titles and current documentation use
+the exact lowercase name. Repository URLs, package name, `KOINOUS_*` settings,
+protocol identifiers and saved sessions remain compatible. Historical records are
+preserved; no repository rename or data migration is part of this change.
+
+| Naming phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | User choice, clean tree, current naming surfaces, PKG impact | Passed |
+| Implement | 25% | synqo replaces provisional display name | Passed |
+| Verify | 25% | TypeScript, 590 Node tests and 33 Python tests; current-name scan | Passed |
+| Document | 25% | User choice and compatibility documented | Passed |
+
+PKG on clean 5dc2255: Ollama metadata request3 callers/0 docs; protected application
+6/1; subscription setup6/0; dashboardHtml2/0; evaluate module0/0. Request/setup
+queries include same-named unrelated matches; counts here identify the production
+symbols changed. No truncation; untraced TS/JS calls are not tracked. Entry-path
+gaps remain covered by existing offline auth/security/evaluation tests; no new
+logic or model calls were introduced. Raw measurements are outside the checkout.
+Final gate: `/private/tmp/synqo-name-check.log`. Overall 48.33%, P6 80% unchanged.
+
 ### Riff branding and Ollama availability — 2026-11-05 (offline)
 
 | Follow-up phase | Weight | Gate | State |

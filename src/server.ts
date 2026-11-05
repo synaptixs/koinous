@@ -107,7 +107,7 @@ return {engine,handler,shutdown,port,host,mode};
 }
 if(process.argv[1] && pathToFileURL(resolve(process.argv[1])).href===import.meta.url) {
   const app=createApplication();
-  const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`Riff (${app.mode}) at http://${app.host}:${app.port}`));
+  const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`synqo (${app.mode}) at http://${app.host}:${app.port}`));
   let shuttingDown=false;
   const stop=()=>{if(shuttingDown)return;shuttingDown=true;server.close();void app.shutdown().finally(()=>server.closeAllConnections());};
   process.on('SIGINT',stop);process.on('SIGTERM',stop);

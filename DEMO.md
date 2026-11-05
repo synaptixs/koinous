@@ -1,4 +1,4 @@
-# Riff team demo
+# synqo team demo
 
 ## OpenAI-only corporate demo
 
@@ -12,7 +12,7 @@ This installs pinned dependencies and reuses your local ChatGPT login or opens
 Codex's browser login flow when needed. Sign in with your approved corporate
 account. It checks only Codex; Claude and Grok are disabled, with no API-key
 fallback. An existing login is reused, so confirm it is the intended corporate
-account before starting. Riff does not select an enterprise workspace for you.
+account before starting. synqo does not select an enterprise workspace for you.
 
 In the UI, enter **two different model IDs** available through that account,
 one for each OpenAI participant. The default targeted workflow uses a low-effort
@@ -26,7 +26,7 @@ Stop with Ctrl+C when finished.
 Your organization must allow Codex and both requested models. Login status is
 not an entitlement or quota check. No model list is invented or automatically
 probed, and a rejected model stops the discussion without fallback or retries.
-Different requested IDs can be aliases; Riff cannot prove distinct underlying
+Different requested IDs can be aliases; synqo cannot prove distinct underlying
 models when the provider does not report their resolved identities. Two models
 from one provider are not independent evidence of correctness. Subscription USD
 costs remain unknown when the SDK supplies no cost.
@@ -69,7 +69,7 @@ Other operating systems and new-account browser login flows remain unverified.
 Use a current [Ollama](https://ollama.com/download) release with `/api/tags` and
 `/api/show` location metadata and text-completion capabilities. Start the app/daemon.
 Local models must already be downloaded; Cloud model entries must be registered
-with that daemon. Choose models in Ollama first. Riff never pulls models or
+with that daemon. Choose models in Ollama first. synqo never pulls models or
 starts sign-in. Cloud additionally requires `ollama signin` with your intended
 Ollama account; it uses Ollama's [local authenticated API path](https://docs.ollama.com/api/authentication),
 not the direct cloud API-key path.
@@ -91,11 +91,11 @@ for mixed selections; `--openai-only` disables it.
 
 **Refresh models** reads only the local registry. Cloud names are daemon model
 names, which can differ from direct cloud API names. If the list is empty, add the
-model through Ollama outside Riff and refresh. Refreshing one local slot updates
+model through Ollama outside synqo and refresh. Refreshing one local slot updates
 both local slots; removing the last local model clears local selection. If the list is unavailable, check
 that Ollama is running. If metadata is unsupported or Local/Cloud doesn't match,
 update Ollama or choose the correct location. An authorization error for Cloud
-requires signing in outside Riff; a listed model does not prove entitlement or quota.
+requires signing in outside synqo; a listed model does not prove entitlement or quota.
 
 Default endpoint: `http://127.0.0.1:11434`. Set `KOINOUS_OLLAMA_URL` before startup
 for another loopback HTTP origin/port. Remote URLs, credentials, paths and redirects
@@ -116,7 +116,7 @@ unverified. No new inference run is authorized by this documentation.
 ## Fastest setup: no credentials and no model calls
 
 Use Node.js 22.16 or newer (Node 22.10 is the package minimum). Extract the source
-archive or clone the repository, then open a terminal in the Riff project root.
+archive or clone the repository, then open a terminal in the synqo project root.
 The mock runtime uses Node built-ins and does not require npm install.
 
 On macOS, Linux or Windows PowerShell:
@@ -191,8 +191,8 @@ remain disputed. Costs are partially unknown, not zero.
 
 ## Use your own subscriptions for real discussions
 
-Each person runs Riff locally and signs in with their own accounts. Browser login
-is handled by the pinned provider CLI, not a password or token form in Riff.
+Each person runs synqo locally and signs in with their own accounts. Browser login
+is handled by the pinned provider CLI, not a password or token form in synqo.
 
 ```sh
 npm ci
@@ -270,7 +270,7 @@ git init -b main
 git add .
 git status --short
 # Inspect the staged paths; .env, runs and node_modules must be absent.
-git commit -m "Initial Riff POC"
+git commit -m "Initial synqo POC"
 git remote add origin <approved-repository-url>
 git push -u origin main
 ```

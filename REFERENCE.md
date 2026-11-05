@@ -23,13 +23,13 @@
 
 ---
 
-# Riff — better ideas together
+# synqo — better ideas together
 
 > **Current product direction (2026-11-01):** discuss an idea with two or three model participants using subscription login, exchange critiques, and produce one recommendation with explicit agreement and unresolved dissent. An idea alone is sufficient; optional context is supported. The active roadmap is W1–W6 in docs/IMPLEMENTATION_PLAN.md. Enterprise hardening and PKG are deferred. Earlier P0–P6 and PKG sections below are historical/optional engineering work, not prerequisites.
 >
 > **Current safety state:** `KOINOUS_ENABLE_INFERENCE=0` blocks real API discussion starts; `GROK_BUILD_ENABLE_INFERENCE=0` remains unchanged. Mock mode still works. The revised final-position workflow is offline-tested; live validation is pending separate authorization.
 
-**Riff** is the current display name for models developing and challenging ideas together. Earlier records retain the original name **Koinous**; repository/package names, `KOINOUS_*` settings, public contract identifiers and saved data remain compatible. The engineering history below is preserved. This is a working name, not a claim of trademark or domain availability.
+**synqo** is the current display name for models developing and challenging ideas together. Earlier records retain the original name **Koinous**; repository/package names, `KOINOUS_*` settings, public contract identifiers and saved data remain compatible. The engineering history below is preserved. The user selected this display name; no trademark or domain availability is asserted.
 
 Available providers: **OpenAI (Codex), Anthropic (Claude), and xAI (Grok Build)**. Choose two or three participants; OpenAI and Claude each support two different models under one provider login; subscription login is the application authentication path, with no API-key fallback. Gemini follows after these adapters are validated; Ollama Cloud + Local is supported through the local Ollama daemon, with local selection available only for installed models. Existing agent IDs (`codex`, `claude`, `grok`) and environment variables remain stable.
 

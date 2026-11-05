@@ -1,8 +1,8 @@
-# Riff · Better ideas together
+# synqo · Better ideas together
 
 **Discuss an idea with multiple models, compare their reasoning, and keep the disagreements visible.**
 
-Riff (formerly Koinous) is a local-first application for a bounded discussion between two or three
+synqo (formerly Koinous) is a local-first application for a bounded discussion between two or three
 model participants. Start with an idea, optionally add context, then review an
 attributed recommendation, alternatives, risks, and next steps.
 
@@ -95,7 +95,7 @@ for account setup and manual controls. Advanced Grok runtime instructions are in
 **Ollama Cloud + Local** is one section in the model picker, with separate
 cloud and local participant slots. Both use
 your local Ollama app/API. Local models run on your machine; Cloud sends prompts to
-Ollama Cloud using `ollama signin`, with no API key stored in Riff.
+Ollama Cloud using `ollama signin`, with no API key stored in synqo.
 See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
 
 1. Install/start [Ollama](https://ollama.com/download) and add the models you want
@@ -118,7 +118,7 @@ See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
    OpenAI-only mode keeps other providers disabled.
 
 Refresh lists only models registered with your daemon; it does not download models,
-check Cloud quota or send an inference prompt. Riff verifies Local/Cloud metadata
+check Cloud quota or send an inference prompt. synqo verifies Local/Cloud metadata
 before a chat. Ollama uses **model default effort**, which may differ across models.
 Token counts and latency appear in the existing UI and exports; missing usage and
 USD remain unknown. No Ollama live acceptance run has been performed.

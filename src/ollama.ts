@@ -17,7 +17,7 @@ async function request(base:string,path:string,load:Fetch,signal:AbortSignal,bod
  signal.throwIfAborted();
  const response=await load(base+path,{method:body===undefined?'GET':'POST',redirect:'error',signal,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
  // Bound metadata/output memory; do not echo upstream errors, signin links or bodies.
- if(!response.ok){await response.body?.cancel();throw new ProviderFailure('provider_error',response.status===401||response.status===403?'Ollama authorization failed. For Cloud, run ollama signin outside Riff.':`Ollama request failed (HTTP ${response.status})`);}
+ if(!response.ok){await response.body?.cancel();throw new ProviderFailure('provider_error',response.status===401||response.status===403?'Ollama authorization failed. For Cloud, run ollama signin outside synqo.':`Ollama request failed (HTTP ${response.status})`);}
  const reader=response.body?.getReader();if(!reader)throw new ProviderFailure('protocol_violation','Ollama response has no body');
  const chunks:Uint8Array[]=[];let size=0;
  try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>4_000_000)throw new ProviderFailure('protocol_violation','Ollama response exceeds 4 MB');chunks.push(value);}}

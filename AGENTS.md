@@ -1,4 +1,4 @@
-# Riff agent guidance
+# synqo agent guidance
 
 ## Progress reporting
 

@@ -75,7 +75,7 @@ export function createProtectedApplication(options:Options){
    if(browser&&!principal&&req.method==='GET'&&url.pathname==='/'){
     audit.record({action:'auth.page',decision:'allow',reason:'public_login_page'});
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; base-uri 'none'; frame-ancestors 'none'",'Referrer-Policy':'no-referrer'});
-    return res.end('<!doctype html><title>Riff login</title><h1>Riff</h1><p>Sign in to review your organization’s discussions.</p><a href="/auth/login">Enterprise sign in</a>');
+    return res.end('<!doctype html><title>synqo login</title><h1>synqo</h1><p>Sign in to review your organization’s discussions.</p><a href="/auth/login">Enterprise sign in</a>');
    }
    if(browserSession&&req.method!=='GET'&&(req.headers.origin!==origin||req.headers['x-csrf-token']!==browserSession.csrf))return deny(403,'csrf_denied');
    if(!principal)return deny(401,'authentication_required');
@@ -146,7 +146,7 @@ if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.u
  const configPath=process.env.KOINOUS_SECURITY_CONFIG;if(!configPath)throw Error('KOINOUS_SECURITY_CONFIG is required');
  const config=JSON.parse(readFileSync(configPath,'utf8'));
  const app=createProtectedApplication({...config,mode:'real'});
- const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`Riff protected review API at http://${app.host}:${app.port}; inference disabled`));
+ const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`synqo protected review API at http://${app.host}:${app.port}; inference disabled`));
  const stop=()=>{server.close();void app.shutdown().finally(()=>server.closeAllConnections());};
  process.on('SIGINT',stop);process.on('SIGTERM',stop);
 }
