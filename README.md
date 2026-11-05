@@ -80,6 +80,10 @@ checks provider account login, and opens missing provider sign-in flows when nee
 3. In each participant row, click **Load models**, then choose from the **Model**
    dropdown. No model is preselected; starting requires a choice for every row.
    In OpenAI-only mode, choose **two different model IDs**.
+   **Number of participants** defaults to **2**. Choose **3 — Full discussion**
+   to add an empty third row, then select its provider and model. Choosing **2**
+   removes the last row and preserves the first two choices. Targeted review uses
+   exactly two participants. Three is unavailable if the server exposes only two slots.
 4. Enter your idea and optional context. Keep **Draft + targeted review**; choose
    the author or use the **Sonnet 5.5 + Astra** preset, then select **Start discussion**.
 5. Review the findings, recorded changes, token accounting and downloadable reports.

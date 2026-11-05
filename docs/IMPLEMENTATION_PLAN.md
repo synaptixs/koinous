@@ -29,6 +29,47 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Participant count selector — 2026-11-05 (offline)
+
+Number of participants now offers 2 (default) and 3 within the existing server
+contract. The third-participant option is explicitly labeled Full discussion;
+choosing it selects that compatible workflow and adds an unconfigured row. No new
+provider or model is assumed. Choosing 2 removes the last row, retaining the first
+two provider/model choices and draft author where present. It does not silently
+switch back to targeted review. That workflow option remains disabled until the
+count is two; backend validation still rejects invalid targeted rosters.
+
+Existing Add/Remove shortcuts synchronize the count. The selector locks during
+execution, rejects unsupported counts and disables three when enabled slot capacity
+is below three. Every fresh page starts with two participants, including full
+discussion, while saved three-participant records restore their original count and
+choices. Explicit pair presets restore two. Public participant IDs, API defaults,
+selection/persistence contracts and historical records remain unchanged.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Existing participant/workflow contracts and PKG impact | Passed |
+| Implement | 25% | Count control, default two and explicit third-row configuration | Passed |
+| Verify | 25% | TypeScript, 658 Node + 33 Python tests; mock browser/mobile | Passed |
+| Document | 25% | Guides, design record and reviewable delivery | Passed |
+
+PKG pre-edit on clean 7e4344a (callers/docs): refresh19/1, app-module0/1;
+setParticipants3/1 and openSaved2/1 inspected for saved compatibility. No truncation;
+JavaScript untraced calls are not tracked, so counts are floors. Regression gaps
+flag addParticipant, finish, loadSavedList, openSaved, setParticipants,
+restoreSavedView and module callbacks; existing VM UI tests are not graph-linked.
+Four new tests cover the default despite a three-provider server roster,
+two/three count transitions, explicit third-row dispatch and running locks,
+saved-three/preset compatibility and enabled capacity/invalid-count rejection.
+Existing Add/Remove tests now assert synchronized counts.
+
+Full offline gate passes. Native-browser checks confirm default two with blank
+models, explicit three selecting Full discussion with a blank third provider/model,
+targeted review disabled at three, and a 390px layout without page-width overflow.
+The preview used mock mode and no discussion was submitted. No model, provider
+metadata, login or research calls ran. The user's running server was untouched.
+Overall 48.33% and P6 80% unchanged.
+
 ### Automatic listing of finished sessions — 2026-11-05 (offline)
 
 The server already persists the report and completion event. The UI now responds
