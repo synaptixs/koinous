@@ -2,7 +2,7 @@
 
 This playbook covers one trusted workstation and P6 evaluation. It does not deliver
 enterprise deployment, corporate account verification or PKG integration. Use only
-provider login for cloud models; no API-key fallback. Local Ollama requires no
+personal or enterprise provider account login for cloud models; no API-key fallback. Local Ollama requires no
 login; Ollama Cloud uses `ollama signin` through the workstation daemon. See
 [Ollama setup](DEMO.md#ollama-cloud--local). The P6 evaluation harness remains
 scoped to its existing approved OpenAI/Claude arms; new picker options do not expand
@@ -10,6 +10,25 @@ benchmark authorization. Grok stays off. Saved product sessions and
 original validation policy are never edited by evaluation. Start from the clean
 revision under review in an isolated checkout with `npm ci`; preserve other work.
 Node >=22.10 is required; exact installed SDK/compiler versions must match package.json.
+
+## Optional research operations
+
+Research defaults to none. Wikipedia is keyless; the user-selected Brave Search API
+requires `BRAVE_SEARCH_API_KEY` in the app server environment. The key is a separate
+research-service credential, never a model API fallback, browser field or SDK env.
+The launcher passes it only to its server step. Do not log it or commit it.
+
+Selected research services each receive only the explicit query. At most one request
+per service, five snippets/introductions each, 128 KiB each and ten seconds shared;
+no result-page fetches, redirects or retry. Any selected-service failure stops before
+model calls. Service charges are outside model-token/known-USD accounting. Persisted
+research snapshots support offline report/reopen without requerying. See
+[research setup](DEMO.md#optional-research). Benchmark research remains disabled by
+its existing protocol; this feature does not expand run authorization.
+
+Provider-managed enterprise browser login is distinct from synqo's own OIDC/browser
+sessions. Correct corporate workspace, organization policies, seats and entitlement
+must still be established for an actual corporate acceptance run.
 
 ## Offline acceptance (no authentication or inference)
 

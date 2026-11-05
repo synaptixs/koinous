@@ -44,6 +44,13 @@ test('subprocess environment strips API routing and live flags; output and time 
  await assert.rejects(runDemoCommand({file:process.execPath,args:['-e','setInterval(()=>{},1000)'],capture:true,timeoutMs:50},new AbortController().signal));
  }finally{for(const k of Object.keys(process.env))if(!(k in old))delete process.env[k];Object.assign(process.env,old);}
 });
+test('web-search key is forwarded only to the server purpose, never install/auth commands',async()=>{
+ const before=process.env.BRAVE_SEARCH_API_KEY;process.env.BRAVE_SEARCH_API_KEY='synthetic-search-key';
+ try{for(const purpose of [undefined,'server'] as const){
+  const result=await runDemoCommand({file:process.execPath,args:['-e','console.log(JSON.stringify({search:process.env.BRAVE_SEARCH_API_KEY,model:process.env.OPENAI_API_KEY}))'],capture:true,timeoutMs:3000,...(purpose?{purpose}:{})},new AbortController().signal);
+  assert.deepEqual(JSON.parse(result.stdout),purpose?{search:'synthetic-search-key'}:{});
+ }}finally{if(before===undefined)delete process.env.BRAVE_SEARCH_API_KEY;else process.env.BRAVE_SEARCH_API_KEY=before;}
+});
 
 test('OpenAI-only launch authenticates only Codex and passes mode to guarded startup',async()=>{
  const calls:DemoCommand[]=[];let status=0;

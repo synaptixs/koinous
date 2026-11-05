@@ -29,6 +29,69 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Optional web/Wikipedia research and account wording — 2026-11-05 (offline)
+
+The user selected Brave Search API for optional web research. The UI offers None
+(default), Wikipedia, Web search or Both. The separate public query is the only
+user input sent to research services; task/context are not implicit queries. One
+shared evidence snapshot, including mode/provider/scope and retained/omitted
+candidate counts, is reused by every participant. At most five Wikipedia article
+introductions plus five Brave result snippets; full result pages are not fetched.
+Total relevant sources remain unknown and truncated excerpts are disclosed.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | PKG, existing contract, official search/account documentation | Passed |
+| Implement | 25% | Explicit research choices, shared evidence, personal/enterprise labels | Passed |
+| Verify | 25% | TypeScript, 610 Node tests + 33 Python tests; offline browser controls | Passed |
+| Document | 25% | Config, privacy/scope and enterprise distinction documented | Passed |
+
+Research has a shared ten-second deadline and 128 KiB per-service response cap;
+both services are concurrent. Selected-source errors, missing configuration, empty
+or invalid results and prompt-size violations stop before model calls. No redirects,
+automatic retries, fallback sources or extra model calls. Web search is unavailable
+until the operator configures BRAVE_SEARCH_API_KEY. Only the server launcher step
+receives it; browser/model SDK/install/auth environments do not. Search-service
+charges are separate from model token/known-USD accounting. No live Brave request
+or model inference was made during development.
+
+Research request and exact snapshot survive restart for both discussion and targeted
+workflows, including self-contained Markdown/JSON and legacy Wikipedia histories.
+Scope/coverage comes from canonical extraction metadata, not URL/filename guesses.
+Older records without metadata keep explicit limited legacy scope. Original reports
+and event history are not rewritten on reopening.
+
+OpenAI/Claude login wording includes personal and enterprise accounts through the
+existing pinned ChatGPT/claude.ai browser flows, including provider-managed SSO.
+Authentication wire IDs and API-key refusal are unchanged. Login status is not proof
+of selected corporate workspace, seats, entitlement or quota. synqo's own protected
+OIDC/enterprise deployment remains a separate configuration and deferred P5 gate;
+protected-mode real inference remains refused. No login was performed.
+
+Offline regressions cover all opt-in combinations, no-research defaults, key/host
+isolation, limits, unsafe results, sibling cancellation, zero inference on retrieval
+failure, shared prompts, both-workflow reopen/exports, availability labels and
+enterprise wording. Browser inspection used a synthetic unused search credential
+with real inference disabled; it verified default None, all four choices, Both
+selection and personal/enterprise labels without starting a discussion. Gate log:
+`/private/tmp/synqo-optional-research-check.log`.
+
+Measured pre-edit impact on clean cb3359e (callers/docs): researchRequest6/0,
+researchEvidence5/0, Engine.create43/1, Engine.run34/2, runTargeted1/0,
+workflowAssessment13/0, workflowMarkdown1/0, makeReport22/2, SavedSessions.restore2/1,
+createApplication18/2, createProtectedApplication6/1, UI refresh13/1, openSaved2/1,
+setup6/0, runDemoCommand3/0, demoLive9/0, preparePersonalDiscussion8/0,
+resolveSelection20/0, composePrompt11/2. Auth command/readiness and SDK-environment
+filtering were also inspected (4/0, 8/0 and 8/0 respectively). No truncation;
+untraced TS/JS calls are not tracked. Counts are floors. Regression gaps flag
+server/demo/start-real/secure-server/evaluate and UI event paths, plus native/auth
+entry paths; new API/UI/launcher regressions and the full gate exercise applicable
+behavior. Raw measurements/plans remain outside the checkout.
+
+Overall 48.33%, P6 80% unchanged. This user-requested implementation is the active
+product task; the external-system pilot remains proposed and unstarted. No new
+benchmark authorization, human grade or enterprise acceptance is implied.
+
 ### User-selected name: synqo — 2026-11-05 (offline)
 
 The user selected **synqo**, superseding the provisional Riff display name below.

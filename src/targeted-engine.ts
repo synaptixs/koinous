@@ -49,7 +49,7 @@ export async function runTargeted(s:Session,factory:AdapterFactory,emit:(s:Sessi
  };
  try{
   s.cancel.signal.throwIfAborted();
-  if(s.research){emit(s,'research.started',{query:s.research.query});s.evidence=await researcher(s.research,s.cancel.signal);emit(s,'research.completed',{query:s.research.query,snapshotId:s.evidence.snapshotId,sha256:s.evidence.hash,sources:s.evidence.items});}
+  if(s.research){emit(s,'research.started',{query:s.research.query,mode:s.research.mode});s.evidence=await researcher(s.research,s.cancel.signal);emit(s,'research.completed',{query:s.research.query,mode:s.research.mode,scope:s.evidence.research?.scope,coverage:s.evidence.research?.coverage,providers:s.evidence.research?.providers,snapshotId:s.evidence.snapshotId,sha256:s.evidence.hash,sources:s.evidence.items});}
   else if(s.grounding==='configured'){s.evidence=await getEvidence(s.prompt,s.cancel.signal);emit(s,'grounding.pinned',{snapshotId:s.evidence.snapshotId,sha256:s.evidence.hash,source:s.evidence.source,itemCount:s.evidence.items.length});}
   else emit(s,'grounding.skipped',{reason:'Idea and supplied context only'});
   if(s.evidence)emit(s,'evidence.snapshot',{evidence:s.evidence});

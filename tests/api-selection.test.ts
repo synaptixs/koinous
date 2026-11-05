@@ -31,6 +31,10 @@ test('API rejects invalid selections and authentication overrides before creatin
  assert.equal(app.engine.sessions.size,0);assert.equal(invocations.length,0);
  assert.equal((await request('/api/sessions','POST',{prompt:'Synthetic'},'https://untrusted.invalid')).status,403);
 });
+test('health reports optional research availability and enterprise account eligibility without exposing search credentials',async t=>{
+ const before=process.env.BRAVE_SEARCH_API_KEY;process.env.BRAVE_SEARCH_API_KEY='synthetic-search-secret';t.after(()=>{if(before===undefined)delete process.env.BRAVE_SEARCH_API_KEY;else process.env.BRAVE_SEARCH_API_KEY=before;});
+ const {request,app,invocations}=setup(t);const health=await request('/api/health');assert.equal(health.json().research.web,true);assert.deepEqual(health.json().providerAccountTypes,['personal','enterprise']);assert.equal(health.json().workspaceVerified,false);assert.doesNotMatch(health.text,/synthetic-search-secret/);assert.equal(invocations.length,0);assert.equal(app.engine.sessions.size,0);
+});
 test('API exposes defaults and script; concurrent discussions retain independent rosters/models, events and reports',async t=>{
  const {request,finished,invocations,outputDir}=setup(t);
  const health=(await request('/api/health')).json();assert.equal(health.availableProviders.length,5);assert.deepEqual(health.agents,['codex','claude']);assert.equal(health.availableProviders[0].defaultModel,'default-codex');
@@ -110,7 +114,7 @@ test('server budget ceilings cannot be relaxed by API clients',async t=>{
 
 test('API rejects invalid research configuration before dispatch and exposes offline workflow coverage',async t=>{
  const {request,finished,app}=setup(t);
- for(const research of [{mode:'web',query:'x'},{mode:'wikipedia',query:''}]){
+ for(const research of [{mode:'unknown',query:'x'},{mode:'wikipedia',query:''}]){
   const r=await request('/api/sessions','POST',{prompt:'Idea',research});assert.equal(r.status,400);
  }
  assert.equal(app.engine.sessions.size,0);

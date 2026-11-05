@@ -4,7 +4,8 @@ import {ResponseValidator} from './response-validation.ts';
 import type {ValidationIssue,ResponseValidation} from './response-validation.ts';
 import type {Session} from './core.ts';
 import {parsePosition} from './discussion-outcome.ts';
-import {RESEARCH_SCOPE} from './research.ts';
+import {researchScope,researchCoverageMarkdown} from './research.ts';
+import type {ResearchRequest} from './research.ts';
 export type PeerResponse={peer:ParticipantId;decision:'adopted'|'rejected'|'unresolved';reason:string};
 export function parsePeerResponses(value:unknown,issues:ValidationIssue[]=[],path='reviews'):PeerResponse[]|null {
  const v=new ResponseValidator(issues);
@@ -51,14 +52,14 @@ export function workflowAssessment(s:Session){
   return {agent,expected,reviewed,responded,missingReviews:expected.filter(p=>!reviewed.some(r=>r.peer===p)),missingRevisions:expected.filter(p=>!responded.some(r=>r.peer===p)),invalidReferences:[...(review?.reviews??[]),...(revisions??[])].filter(r=>!expected.includes(r.peer)).map(r=>r.peer),openQuestions:review?.openQuestions??[]};
  });
  const research=s.events.find(e=>e.type==='research.completed');
- const requested=s.events[0]?.research;
- return {research:research?{status:'completed',query:research.query,scope:RESEARCH_SCOPE,sources:research.sources}: {status:requested?'unavailable':'not-requested',scope:requested?RESEARCH_SCOPE:'No external research performed.'},rows,
+ const requested=(s.research??s.events[0]?.research) as ResearchRequest|undefined;
+ return {research:research?{status:'completed',query:research.query,scope:typeof research.scope==='string'?research.scope:researchScope(requested),mode:research.mode??requested?.mode??'wikipedia',coverage:research.coverage,sources:research.sources}: {status:requested?'unavailable':'not-requested',scope:requested?researchScope(requested):'No external research performed.'},rows,
   complete:roster.length>=2&&s.maxRounds===3&&rows.every(r=>!r.missingReviews.length&&!r.missingRevisions.length&&!r.invalidReferences.length),
   scope:'One bounded revision cycle: independent analysis → peer review → revised final positions. Coverage checks declarations and available peer replies, not the quality of reasoning or factual truth. Missing providers remain gaps.'};
 }
 export function workflowMarkdown(s:Session):string[]{
  const safe=(value:string)=>value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/[\r\n]+/g,' ');
- const w=workflowAssessment(s),lines=['## Research and collaboration coverage','',w.scope,'',`Research: ${w.research.status}. ${w.research.scope}`,''];
+ const w=workflowAssessment(s),lines=['## Research and collaboration coverage','',w.scope,'',`Research: ${w.research.status}. ${w.research.scope}`,'',...researchCoverageMarkdown(s.evidence?.research),''];
  for(const r of w.rows){
   lines.push(`- ${r.agent}: reviewed ${r.reviewed.length}/${r.expected.length} peers; answered ${r.responded.length}/${r.expected.length} peer critiques. Missing reviews: ${r.missingReviews.join(', ')||'none'}; missing revisions: ${r.missingRevisions.join(', ')||'none'}.`);
   for(const p of r.responded)lines.push(`  - ${p.peer}: ${p.decision} — ${safe(p.reason)}`);

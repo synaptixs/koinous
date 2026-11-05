@@ -1,3 +1,4 @@
+import {researchAvailability} from './research.ts';
 import {tokenAccounting} from './token-accounting.ts';
 import {ollamaModels,isOllama} from './ollama.ts';
 import {PARTICIPANTS,providerFor} from './participants.ts';
@@ -52,7 +53,7 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
       try{return json(res,200,await ollamaModels(provider,options.ollamaFetch));}
       catch{return json(res,503,{error:'Ollama model list unavailable. Start Ollama and register models, then refresh. No inference was requested.'});}
     }
-    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:isOllama(providerFor(id)),group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
+    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,research:researchAvailability(),providerAccountTypes:['personal','enterprise'],workspaceVerified:false,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:isOllama(providerFor(id)),group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
     if(req.method==='GET'&&url.pathname==='/api/sessions'){
       const query=historyQuery(url.searchParams);
       const found=saved.list();

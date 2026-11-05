@@ -43,7 +43,7 @@ function viewSection(title,...children){const section=viewNode('section',undefin
 function viewDetails(title,...children){const detail=viewNode('details',undefined,'audit-details');detail.append(viewNode('summary',title),...children);return detail;}
 
 const $ = id => document.getElementById(id);
-let sessionId = null, events = null, ready = false, busy = false, inferenceEnabled = false;
+let sessionId = null, events = null, ready = false, busy = false, inferenceEnabled = false, webSearchAvailable = false;
 const rows = [];
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
 let historyFilters = {provider:'', model:'', from:'', to:''};
@@ -68,7 +68,8 @@ function refresh() {
   $('roleNote').textContent=targeted?'Author '+$('author').value+' · '+effort($('author').value,'low')+'; reviewer '+reviewer+' · '+effort(reviewer,'medium')+'. Fresh requests; at most three calls.':'Full discussion: participants exchange independent positions over the selected rounds.';
   const missingOllama=selected.some(row=>row.modelDiscovery&&!(row.model.value.trim()||row.defaultModel));
   const unavailableLocal=selected.some(row=>row.requiresInstalledModel&&!row.availableModels.includes(row.model.value.trim()||row.defaultModel));
-  const error = targeted&&(chosen.providers.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const unavailableResearch=['web','both'].includes($('researchMode').value)&&!webSearchAvailable;
+  const error = targeted&&(chosen.providers.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': !ready ? 'Provider configuration unavailable.' : chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
   $('run').disabled = busy || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
@@ -206,7 +207,10 @@ const configurationReady = fetch('/api/health').then(async response => {
   if (!response.ok) throw Error('Configuration unavailable');
   const health = await response.json();
   inferenceEnabled = health.mode === 'mock' || health.inferenceEnabled === true;
-  $('providers').textContent = health.mode === 'mock' ? 'Mock mode · no model calls' : 'Provider login for cloud models · local Ollama needs no login · no API-key fallback';
+  webSearchAvailable=health.research?.web===true;
+  for(const option of $('researchMode').children)if(['web','both'].includes(option.value))option.disabled=!webSearchAvailable;
+  $('researchStatus').textContent=webSearchAvailable?'Wikipedia and web search are available. Research is optional and off by default.':'Wikipedia is available. Web search is not configured on this server. Research is optional and off by default.';
+  $('providers').textContent = health.mode === 'mock' ? 'Mock mode · no model calls' : 'OpenAI/Claude: personal or enterprise account login · Ollama: cloud sign-in or local models';
   for (const provider of health.availableParticipants || health.availableProviders) {
     const card = document.createElement('div'); card.className = 'choice';
     const label = document.createElement('label');
@@ -241,6 +245,7 @@ const configurationReady = fetch('/api/health').then(async response => {
 }).catch(() => { $('providers').textContent = 'Provider configuration unavailable'; refresh(); });
 $('rounds').onchange = refresh;
 $('workflowMode').onchange=refresh;$('author').onchange=refresh;
+$('researchMode').onchange=refresh;
 $('usePair').onclick=()=>{for(const row of rows){row.toggle.checked=['claude','codex'].includes(row.id);if(row.id==='claude')row.model.value='claude-sonnet-5-5';if(row.id==='codex')row.model.value='gpt-6-astra';}$('workflowMode').value='targeted';$('author').value='claude';refresh();};
 function finish(status) {
   busy = false; $('status').textContent = status; $('send').disabled = true; $('cancel').disabled = true;
@@ -250,7 +255,7 @@ $('run').onclick = async () => {
   if (busy || !refresh() || !inferenceEnabled) return;
   const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection(),workflowMode:$('workflowMode').value};
   if(request.workflowMode==='targeted'){request.maxRounds=3;request.author=$('author').value;request.checks=$('acceptanceChecks').value.split('\n').map(s=>s.trim()).filter(Boolean);}
-  if($('researchMode').value==='wikipedia')request.research={mode:'wikipedia',query:$('researchQuery').value};
+  if(['wikipedia','web','both'].includes($('researchMode').value))request.research={mode:$('researchMode').value,query:$('researchQuery').value};
   sessionId = null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; refresh();
   if (events) events.close();
   $('outcome').textContent = 'Available after the discussion.'; $('evidence').textContent = 'Idea and optional context';
@@ -265,11 +270,11 @@ $('run').onclick = async () => {
       switch (x.type) {
         case 'participants.configured': $('maxCalls').textContent = x.maxCalls; append('Selected participants', x.agents.map(id => id + ': ' + (x.selection?.models[id] || 'SDK default')).join('\n')); break;
         case 'runtime.preparing': $('status').textContent = 'Preparing runtime'; append('Runtime · ' + x.agent, 'Provisioning and verifying the isolated runtime before model calls'); break;
-        case 'runtime.ready': append('Runtime · ' + x.agent, 'Sandbox and subscription authentication verified'); break;
+        case 'runtime.ready': append('Runtime · ' + x.agent, 'Sandbox and provider account authentication verified'); break;
         case 'runtime.cleaning': $('status').textContent = 'Cleaning up'; append('Runtime · ' + x.agent, 'Cleaning credentials and removing the disposable runtime'); break;
         case 'runtime.cleaned': append('Runtime · ' + x.agent, 'Runtime cleanup completed'); break;
         case 'research.started': $('status').textContent='Researching'; append('Research query',x.query); break;
-        case 'research.completed': $('evidence').textContent=x.sources.length+' Wikipedia background sources'; append('Retrieved sources',x.sources.map(s=>s.id+' · '+s.uri+'\n'+s.text).join('\n\n')); break;
+        case 'research.completed': $('evidence').textContent=x.sources.length+' research sources'+(x.providers?' · '+x.providers.join(' + '):''); append('Research coverage',(x.scope||'Limited research; detailed source coverage was not recorded.')+(Array.isArray(x.coverage)?'\n'+x.coverage.map(c=>c.source+': '+c.returned+' of '+c.received+' returned candidates retained; '+c.resultsOmitted+' omitted. Total relevant sources unknown.'+(c.excerptsTruncated?' Excerpts truncated.':'')).join('\n'):''));append('Retrieved sources',x.sources.map(s=>s.id+' · '+(s.title?s.title+' · ':'')+s.uri+'\n'+s.text).join('\n\n')); break;
         case 'targeted.assessed': showTargeted(x.targeted); break;
         case 'workflow.assessed': showWorkflow(x.workflow); break;
         case 'grounding.skipped': $('evidence').textContent = 'Idea and optional context'; break;

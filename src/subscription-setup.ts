@@ -44,15 +44,15 @@ export async function checkSubscriptions(run:AuthRunner=runAuth){
  return result;
 }
 export async function setup(args:string[],run:AuthRunner=runAuth):Promise<string>{
- if(!args.length)return 'Personal subscription setup (no model calls):\n1. npm ci\n2. npm run setup -- login codex\n3. npm run setup -- login claude\n4. npm run setup -- status\nThen: npm run start:real -- --enable-inference\nSign in with your own ChatGPT and Claude subscription in the browser. Never paste keys into synqo. Setup does not enable inference.';
+ if(!args.length)return 'Provider account setup — personal or enterprise (no model calls):\n1. npm ci\n2. npm run setup -- login codex\n3. npm run setup -- login claude\n4. npm run setup -- status\nThen: npm run start:real -- --enable-inference\nSign in with your personal or enterprise ChatGPT/Claude account in the provider browser flow, including SSO when your organization requires it. Confirm the intended workspace and administrator access. Never paste keys into synqo. Setup does not enable inference.';
  if(args.length===1&&args[0]==='status'){
   const ready=await checkSubscriptions(run);
-  return `Codex subscription login: ${ready.codex?'ready':'not confirmed'}\nClaude subscription login: ${ready.claude?'ready':'not confirmed'}\nLogin state is not a quota or entitlement check. No model call was made.`;
+  return `Codex account login (personal or enterprise): ${ready.codex?'ready':'not confirmed'}\nClaude account login (personal or enterprise): ${ready.claude?'ready':'not confirmed'}\nLogin state does not verify the selected enterprise workspace, organization entitlement or quota. No model call was made.`;
  }
  if(args.length===2&&args[0]==='login'&&['codex','claude'].includes(args[1])){
   const provider=args[1] as LoginProvider;const result=await run(provider,'login');
   if(result.code!==0)throw Error(`${provider} login did not complete. Retry setup; no API-key fallback.`);
-  return `${provider} browser login finished. Run npm run setup -- status to confirm subscription authentication. Inference remains disabled.`;
+  return `${provider} browser login finished. Run npm run setup -- status to confirm provider account authentication. Inference remains disabled.`;
  }
  throw Error('Use npm run setup, setup -- login codex, setup -- login claude, or setup -- status.');
 }

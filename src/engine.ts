@@ -91,9 +91,10 @@ export class Engine extends EventEmitter {
       }
       const timeouts = new Map(adapters.map(a => [a.id, callTimeoutMs(providerFor(a.id))]));
       if(s.research){
-        this.emitEvent(s,'research.started',{query:s.research.query});
+        this.emitEvent(s,'research.started',{query:s.research.query,mode:s.research.mode});
         s.evidence=await this.researcher(s.research,s.cancel.signal);
-        this.emitEvent(s,'research.completed',{query:s.research.query,snapshotId:s.evidence.snapshotId,sha256:s.evidence.hash,sources:s.evidence.items});
+        this.emitEvent(s,'research.completed',{query:s.research.query,mode:s.research.mode,scope:s.evidence.research?.scope,coverage:s.evidence.research?.coverage,providers:s.evidence.research?.providers,snapshotId:s.evidence.snapshotId,sha256:s.evidence.hash,sources:s.evidence.items});
+        this.emitEvent(s,'evidence.snapshot',{evidence:s.evidence});
       }else if(s.grounding==='configured'){
         s.evidence=await getEvidence(s.prompt,s.cancel.signal);
         this.emitEvent(s,'grounding.pinned',{snapshotId:s.evidence.snapshotId,sha256:s.evidence.hash,source:s.evidence.source,itemCount:s.evidence.items.length,publication:s.evidence.publication??null});

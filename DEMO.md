@@ -44,16 +44,16 @@ npm run demo:live
 ```
 
 This command installs pinned dependencies using `npm ci` (internet required;
-replaces node_modules on each launch), reuses existing subscription logins, opens
-any missing ChatGPT/Claude subscription login flow, and verifies the login method
+replaces node_modules on each launch), reuses existing provider account logins, opens
+any missing personal/enterprise ChatGPT/Claude account login flow, and verifies the login method
 before starting the existing live UI. Complete the provider browser sign-ins yourself.
 No API-key fallback, credentials copied into the project, or model prompts during
 setup. Login status confirms the method, not quota or model access. Grok stays off.
 
 Open the localhost URL printed in the terminal. Select models available to your
-subscriptions, enter an idea, keep Draft + targeted review, choose the author,
+personal or enterprise accounts, enter an idea, keep Draft + targeted review, choose the author,
 and click Start discussion. Only
-that click sends model prompts and uses subscription quota. Stop with Ctrl+C to
+that click sends model prompts and uses provider account quota. Stop with Ctrl+C to
 end the server's inference opt-in. Startup errors stop without automatic retries.
 Existing manual setup commands below remain available for troubleshooting.
 `npm run demo:live -- --help` prints offline instructions without installation/login.
@@ -113,6 +113,44 @@ multi-tenant mode does not expose the personal daemon. Offline mock UI/tests
 verify integration; live compatibility, recommendation quality and savings remain
 unverified. No new inference run is authorized by this documentation.
 
+## Optional research
+
+The Research selector defaults to **None — use idea and supplied context**.
+Select Wikipedia, Web search, or both only when you want external research. Both
+services receive the same explicit public query. The idea/context are not used as
+implicit search queries. Avoid entering private information in the query field.
+
+Wikipedia needs no key. To enable web search, obtain a Brave Search API key from
+[Brave's dashboard](https://api-dashboard.search.brave.com/) and set
+`BRAVE_SEARCH_API_KEY` in the server environment before startup. For example, in
+Bash/Zsh use `export BRAVE_SEARCH_API_KEY='<your-key>'`; in PowerShell use
+`$env:BRAVE_SEARCH_API_KEY='<your-key>'`. Then use the existing `start:real` or
+`demo:live` launcher. Do not paste this key into the model selector, research
+query or discussion. The live launcher forwards it only to the app server, never
+to installation/authentication steps or model SDKs. No Brave key is required for
+Wikipedia-only or no-research use.
+
+Research retrieves at most five Wikipedia introductions and five Brave snippets,
+with one request per selected service, a shared ten-second deadline and a 128 KiB
+response cap per service. It never follows result URLs or automatically retries.
+If either selected service fails, no model prompt is dispatched. Both-source
+retrieval can therefore use up to 256 KiB before the shared prompt-size check.
+Results disclose partial excerpts, omitted candidates and unknown total relevant
+coverage. Search-service charges are separate and are not reported as model cost.
+
+The exact query, source IDs, excerpts, provider/scope metadata and snapshot hash
+remain in saved sessions and Markdown/JSON exports. Reopening does not repeat
+research. Legacy Wikipedia-only sessions remain readable without new web calls.
+Research does not imply source correctness or independently verified quality.
+
+Personal/enterprise provider account login uses the existing pinned provider
+browser flows. OpenAI's [authentication guide](https://learn.chatgpt.com/docs/auth)
+and Claude's [authentication guide](https://code.claude.com/docs/en/authentication)
+describe managed-account access. Login status confirms the authentication method;
+it does not verify your intended enterprise workspace, seat, model entitlement
+or quota. synqo's own protected OIDC enterprise sign-in/deployment is a separate
+configuration and acceptance gate; this change does not mark P5 complete.
+
 ## Fastest setup: no credentials and no model calls
 
 Use Node.js 22.16 or newer (Node 22.10 is the package minimum). Extract the source
@@ -135,7 +173,7 @@ The launcher does not load `.env` and overrides inherited provider/mode/inferenc
 settings: mock Codex and Claude initially selected, mock Ollama choices available,
 Grok off, both live-inference switches disabled.
 No login, API key, VM, dependency installation or model call is needed. New discussions
-are also mock-only. Keep research set to “Use idea and supplied context” for an offline demo.
+are also mock-only. Keep research set to “None — use idea and supplied context” for an offline demo.
 
 If port 3030 is occupied, use `PORT=3031 npm run demo` on macOS/Linux, or set
 `$env:PORT='3031'` before `npm run demo` in PowerShell. Stop with Ctrl+C.
@@ -162,7 +200,7 @@ reliability for every idea. The mock walkthrough remains available.
 
 1. Explain: “One draft → focused defect review → revision only for material findings, with unresolved issues preserved.”
 2. Enter: “How should developers search source code and documentation: lexical, semantic, or hybrid retrieval?”
-3. Keep Codex and Claude selected, Draft + targeted review, Claude as author, and “Use idea and supplied context”.
+3. Keep Codex and Claude selected, Draft + targeted review, Claude as author, and “None — use idea and supplied context”.
 4. Start discussion. These are deterministic mock stand-ins, not actual model opinions;
    model IDs do not select real models in mock mode. No external research is requested.
 5. Show the two mock replies, skipped revision, retained draft and per-call token accounting. Mock findings and zero tokens illustrate plumbing only. Offline tests exercise the material-finding/third-call branch.
@@ -189,7 +227,9 @@ The shared direction is a lexical plus typed-graph baseline, then an evaluated
 semantic/hybrid comparison. Exact-hit priority and code/documentation authority
 remain disputed. Costs are partially unknown, not zero.
 
-## Use your own subscriptions for real discussions
+<a id="use-your-own-subscriptions-for-real-discussions"></a>
+
+## Personal or enterprise accounts for real discussions
 
 Each person runs synqo locally and signs in with their own accounts. Browser login
 is handled by the pinned provider CLI, not a password or token form in synqo.
@@ -203,7 +243,9 @@ npm run setup -- status
 ```
 
 The two login commands open the provider browser flows. Choose your ChatGPT account
-for Codex and Claude subscription account for Claude. They store credentials in the
+for Codex and a claude.ai personal or enterprise account for Claude. Complete
+your provider-managed SSO flow if your organization requires it, and confirm the
+intended workspace and administrator-granted access. They store credentials in the
 provider's normal local credential store (including any existing CODEX_HOME or
 CLAUDE_CONFIG_DIR override). No credentials are copied into the repository or shared
 with teammates. Existing CLI sign-ins may be reused: start with `setup -- status`.
@@ -216,13 +258,13 @@ only ready/not-confirmed, not account details, tokens or raw provider output.
 It confirms the reported authentication method, not current quota, model access or
 successful inference. Unknown/unsupported methods fail closed.
 
-When ready to spend your own subscription quota, deliberately run:
+When ready to use your personal or enterprise account quota, deliberately run:
 
 ```sh
 npm run start:real -- --enable-inference
 ```
 
-This checks both subscription logins and starts localhost:3030 with Codex and Claude.
+This checks both provider account logins and starts localhost:3030 with Codex and Claude.
 Choose models and the author in the UI, enter your idea, and press Start discussion.
 Targeted review uses two or three application calls; Full discussion retains up to
 six calls for two participants. In either mode, internal SDK behavior

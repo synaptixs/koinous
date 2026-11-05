@@ -1,3 +1,4 @@
+import {researchAvailability} from './research.ts';
 import {AGENTS,PROVIDER_LABELS} from './core.ts';
 import {SDKWorkers} from './sdk-worker.ts';
 import {WorkerProfiles} from './worker-profiles.ts';
@@ -123,7 +124,7 @@ export function createProtectedApplication(options:Options){
    if(url.pathname==='/api/models')return deny(403,'tenant_provider_isolation_pending');
    if(req.method==='GET'&&url.pathname==='/api/health'){
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    return res.end(JSON.stringify({status:'ok',mode,authentication:browserSession?'browser-session':'application-bearer',providerAuthentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock',uiSupported:!!browser,agents:configuredProviders(),availableProviders:enabledProviders().filter(id=>(AGENTS as readonly string[]).includes(id)).map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:modelDefaults()[id]||''}))}));
+    return res.end(JSON.stringify({status:'ok',mode,research:researchAvailability(),providerAccountTypes:['personal','enterprise'],workspaceVerified:false,authentication:browserSession?'browser-session':'application-bearer',providerAuthentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock',uiSupported:!!browser,agents:configuredProviders(),availableProviders:enabledProviders().filter(id=>(AGENTS as readonly string[]).includes(id)).map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:modelDefaults()[id]||''}))}));
    }
    if(browser&&req.method==='GET'&&url.pathname==='/'){
     const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8').replace('<script src="/app.js"','<script src="/browser-session.js"></script><script src="/app.js"');
