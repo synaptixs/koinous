@@ -85,7 +85,12 @@ function refresh(preferredAuthor) {
   $('usePair').disabled=busy||!participantOptions.some(r=>r.id==='claude')||!participantOptions.some(r=>r.id==='codex');
   for(const id of ['researchMode','researchQuery']) $(id).disabled = busy;
   $('addParticipant').hidden=targeted;
-  $('addParticipant').disabled=busy||!ready||rows.length>=3;
+  $('addParticipant').disabled=busy||!ready||rows.length>=3||participantOptions.length<3;
+  $('participantCount').value=String(rows.length>=2?rows.length:2);
+  $('participantCount').disabled=busy||!ready;
+  for(const option of $('participantCount').children)if(option.value==='3')option.disabled=participantOptions.length<3;
+  for(const option of $('workflowMode').children)if(option.value==='targeted')option.disabled=rows.length>2;
+  $('participantCountHint').textContent=rows.length===3?'Three participants use Full discussion. Choose a provider and model for each participant. To use targeted review, choose 2 participants first.':'Default: 2 participants. Choosing 3 uses Full discussion and adds an empty participant row.';
   for (const row of rows) {
     const number=rows.indexOf(row)+1;
     row.title.textContent='Participant '+number;
@@ -391,7 +396,7 @@ const configurationReady = fetch('/api/health').then(async response => {
   $('providers').textContent = health.mode === 'mock' ? 'Mock mode · no model calls' : 'OpenAI/Claude: personal or enterprise account login · Ollama: cloud sign-in or local models';
   participantOptions=(health.availableParticipants||health.availableProviders).map(option=>({...option,provider:option.provider||option.id}));
   providerOptions=[...new Set(participantOptions.map(option=>option.provider))].map(id=>({id,label:health.availableProviders?.find(option=>option.id===id)?.label||participantOptions.find(option=>option.provider===id).label}));
-  const ids=health.agents.filter(id=>participantOptions.some(option=>option.id===id)&&($('workflowMode').value!=='targeted'||participantOptions.find(option=>option.id===id).provider!=='grok')).slice(0,$('workflowMode').value==='targeted'?2:3);
+  const ids=health.agents.filter(id=>participantOptions.some(option=>option.id===id)&&($('workflowMode').value!=='targeted'||participantOptions.find(option=>option.id===id).provider!=='grok')).slice(0,2);
   while(ids.length<2){const next=participantOptions.find(option=>!ids.includes(option.id)&&($('workflowMode').value!=='targeted'||option.provider!=='grok'));if(!next)break;ids.push(next.id);}
   setParticipants({providers:ids,models:{}});
   ready = true; refresh();
@@ -400,6 +405,13 @@ $('rounds').onchange = refresh;
 $('workflowMode').onchange=refresh;$('author').onchange=refresh;
 $('researchMode').onchange=refresh;
 for(const id of ['question','context','acceptanceChecks','researchQuery'])$(id).oninput=refresh;
+$('participantCount').onchange=()=>{
+  const count=Number($('participantCount').value),author=$('author').value;
+  if(busy||!ready||![2,3].includes(count)||(count===3&&participantOptions.length<3)){refresh();return;}
+  if(count===3)$('workflowMode').value='discussion';
+  while(rows.length<count)addParticipant();
+  rows.splice(count);$('participantChoices').replaceChildren(...rows.map(row=>row.card));refresh(author);
+};
 $('addParticipant').onclick=()=>{if(!busy&&ready&&$('workflowMode').value!=='targeted'){addParticipant();refresh();}};
 $('usePair').onclick=()=>{if(busy||$('usePair').disabled)return;setParticipants({providers:['codex','claude'],models:{codex:'gpt-6-astra',claude:'claude-sonnet-5-5'}});$('workflowMode').value='targeted';refresh('claude');};
 function finish(status) {

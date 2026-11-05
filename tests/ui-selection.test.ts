@@ -20,8 +20,8 @@ class Element {
   replaceChildren(...children:Element[]){this.children=[...children];this.ownText='';}
 }
 async function setup(failedHealth=false,failedPost=false,saved?:Record<string,any>,real=false,historyFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,initialURL?:string,healthOverride:Record<string,unknown>={},modelFetch?:(url:string)=>Promise<{ok:boolean;json:()=>Promise<any>}>,fixtureChoices=true) {
-  const elements=Object.fromEntries(['saveStatus','workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
-  elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
+  const elements=Object.fromEntries(['participantCount','participantCountHint','saveStatus','workflowSteps','workflowProgress','authorField','acceptanceField','researchStatus','participantChoices','addParticipant','stageTags','workflowMode','author','acceptanceChecks','usePair','roleNote','tokenTotals','tokenDetails','jsonReport','researchMode','researchQuery','savedProvider','savedModel','savedFrom','savedTo','savedSearch','searchSaved','clearSaved','previousSaved','nextSaved','savedPage','savedSessions','openSaved','refreshSaved','savedStatus','reviewNotice','context','outcome','plannedCalls','maxCalls','providers','selectionError','run','rounds','question','feed','status','calls','cost','report','send','cancel','evidence','intervene'].map(id=>[id,new Element()]));
+  elements.participantCount.tagName='select';for(const value of ['2','3'])elements.participantCount.append(Object.assign(new Element(),{value}));elements.author.tagName='select';elements.workflowMode.value='discussion';elements.rounds.value='3';elements.question.value='Synthetic question';
   const requests:Array<Record<string,any>>=[];const historyRequests:string[]=[],modelRequests:string[]=[];
   const streams:FakeEvents[]=[];
   class FakeEvents {
@@ -147,6 +147,28 @@ test('legacy workflow respects selected rounds and hides targeted-only fields',a
  assert.equal(e.authorField.hidden,true);assert.equal(e.acceptanceField.hidden,true);assert.match(e.workflowSteps.children[0].textContent,/Independent views.*All selected participants/);
  assert.match(e.workflowSteps.children[1].textContent,/Peer critique.*Not selected/);assert.match(e.workflowSteps.children[2].textContent,/Revised positions.*Not selected/);assert.equal(e.plannedCalls.textContent,2);
 });
+test('fresh full-discussion pages default to two participants even when three are configured, without picking models',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{agents:['codex','claude','grok']},undefined,false);
+ assert.equal(ui.rows.length,2);assert.equal(ui.elements.participantCount.value,'2');assert.ok(ui.rows.every(row=>row.model.value===''));assert.equal(ui.elements.run.disabled,true);assert.equal(ui.modelRequests.length,0);assert.equal(ui.requests.length,0);
+});
+test('choosing three explicitly selects full discussion and requires configuring the extra row; count changes preserve choices',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth),e=ui.elements;
+ e.workflowMode.value='targeted';e.workflowMode.onchange!();const first=ui.rows.map(row=>({provider:row.provider.value,model:row.model.value})),author=e.author.value;
+ e.participantCount.value='3';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.workflowMode.value,'discussion');assert.equal(e.participantCount.value,'3');assert.equal(e.author.value,author);assert.equal(ui.rows[2].provider.value,'');assert.equal(ui.rows[2].model.value,'');assert.equal(e.run.disabled,true);assert.equal(e.plannedCalls.textContent,6);
+ assert.deepEqual(ui.rows.slice(0,2).map(row=>({provider:row.provider.value,model:row.model.value})),first);assert.equal(ui.requests.length,0);assert.equal(ui.modelRequests.length,0);
+ e.participantCount.value='2';e.participantCount.onchange!();assert.equal(ui.rows.length,2);assert.equal(e.workflowMode.value,'discussion');assert.equal(e.author.value,author);assert.deepEqual(ui.rows.map(row=>({provider:row.provider.value,model:row.model.value})),first);
+ e.participantCount.value='3';e.participantCount.onchange!();const third=ui.rows[2];third.provider.value='claude';third.provider.onchange!();third.model.value='explicit-third';third.model.oninput!();assert.equal(e.plannedCalls.textContent,9);await e.run.onclick!();
+ assert.deepEqual(ui.requests[0].selection,{providers:['codex','claude','claude-2'],models:{codex:'codex-default',claude:'claude-fixture','claude-2':'explicit-third'}});assert.equal(e.participantCount.disabled,true);e.participantCount.value='2';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.participantCount.value,'3');
+});
+test('saved three-participant sessions restore their count and models; the explicit pair preset resets the count to two',async()=>{
+ const saved={id:'saved-id',prompt:'Three saved participants',status:'completed',readOnly:true,maxRounds:3,calls:3,spendKnownUSD:0,entries:[],selection:{providers:['codex','claude','grok'],models:{codex:'old-codex',claude:'old-claude',grok:'old-grok'}}};
+ const ui=await setup(false,false,saved);ui.elements.savedSessions.value='saved-id';await ui.elements.openSaved.onclick!();assert.equal(ui.elements.participantCount.value,'3');assert.equal(ui.rows.length,3);assert.deepEqual(ui.rows.map(row=>row.model.value),['old-codex','old-claude','old-grok']);assert.equal(ui.requests.length,0);assert.equal(ui.streams.length,0);assert.equal(ui.modelRequests.length,0);
+ await ui.elements.usePair.onclick!();assert.equal(ui.elements.participantCount.value,'2');assert.equal(ui.rows.length,2);assert.equal(ui.elements.workflowMode.value,'targeted');
+});
+test('the count selector respects enabled slot capacity and rejects unsupported counts',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{agents:['codex','codex-2'],availableProviders:[mixedHealth.availableProviders[0]],availableParticipants:mixedHealth.availableParticipants.slice(0,2)},undefined,false),e=ui.elements;
+ assert.equal(e.participantCount.children.find(o=>o.value==='3')!.disabled,true);e.participantCount.value='3';e.participantCount.onchange!();assert.equal(ui.rows.length,2);assert.equal(e.participantCount.value,'2');e.participantCount.value='4';e.participantCount.onchange!();assert.equal(ui.rows.length,2);assert.equal(e.participantCount.value,'2');assert.equal(ui.requests.length,0);
+});
 test('one participant list numbers rows globally and offers Ollama in the same provider selector',async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth);
  assert.equal(ui.rows.length,2);
@@ -163,11 +185,11 @@ test('add/remove renumbers visible participants while retaining wire identities,
  const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth),e=ui.elements;
  ui.rows[0].model.value='model-a';ui.rows[1].provider.value='codex';ui.rows[1].provider.onchange!();ui.rows[1].model.value='model-b';ui.rows[1].model.oninput!();
  assert.equal(e.author.value,'codex-2');
- await e.addParticipant.onclick!();assert.equal(ui.rows.length,3);assert.equal(e.addParticipant.disabled,true);assert.equal(e.run.disabled,true);
+ await e.addParticipant.onclick!();assert.equal(ui.rows.length,3);assert.equal(e.participantCount.value,'3');assert.equal(e.addParticipant.disabled,true);assert.equal(e.run.disabled,true);
  const third=ui.rows[2];assert.equal(third.provider.children.find(option=>option.value==='codex')!.disabled,true);
  third.provider.value='ollama-cloud';third.provider.onchange!();third.model.value='cloud:model';third.model.oninput!();assert.equal(e.plannedCalls.textContent,9);
  e.workflowMode.value='targeted';e.workflowMode.onchange!();assert.equal(e.addParticipant.hidden,true);assert.equal(e.run.disabled,true);assert.equal(ui.rows.length,3);
- await ui.rows[0].remove.onclick!();assert.equal(ui.rows.length,2);assert.equal(ui.rows[0].title.textContent,'Participant 1');assert.equal(ui.rows[1].title.textContent,'Participant 2');assert.equal(e.author.value,'codex-2');
+ await ui.rows[0].remove.onclick!();assert.equal(ui.rows.length,2);assert.equal(e.participantCount.value,'2');assert.equal(ui.rows[0].title.textContent,'Participant 1');assert.equal(ui.rows[1].title.textContent,'Participant 2');assert.equal(e.author.value,'codex-2');
  assert.equal(ui.rows[0].model.value,'model-b');assert.equal(ui.rows[1].model.value,'cloud:model');assert.match(e.author.children[0].textContent,/Participant 1 · OpenAI Codex · model-b/);
  await e.run.onclick!();assert.equal(ui.requests[0].author,'codex-2');assert.deepEqual(ui.requests[0].selection,{providers:['codex-2','ollama-cloud'],models:{'codex-2':'model-b','ollama-cloud':'cloud:model'}});
 });

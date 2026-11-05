@@ -95,8 +95,13 @@ discussions cannot start until installed models are found; only listed local mod
 If none are installed or Ollama is unavailable, choose Cloud or another provider.
 The picker shows two rows, numbered once across all providers. Each row selects
 one provider and model. Both rows may use the same provider with different explicit
-model IDs. Full discussion can add a third row with **Add participant**; targeted
-review uses exactly two. The ordinary Codex + Claude launcher also exposes Ollama
+model IDs. **Number of participants** defaults to **2**; choose
+**3 — Full discussion** to add an empty third row and use that compatible workflow.
+Choose its provider and model yourself. Choosing **2** removes the last row without
+changing the first two choices; targeted review then becomes available again.
+The **Add participant** and **Remove** shortcuts keep the count in sync. Saved
+three-participant discussions reopen with their original count and models.
+The ordinary Codex + Claude launcher also exposes Ollama
 for mixed selections; `--openai-only` disables it.
 
 **Refresh models** reads only the local registry. Cloud names are daemon model
