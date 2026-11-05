@@ -1,3 +1,4 @@
+import {providerFor} from './participants.ts';
 import type {Session} from './core.ts';
 import type {ParticipantId} from './participants.ts';
 
@@ -69,7 +70,7 @@ export function targetedPrompt(s:Session,stage:'draft'|'review'|'revision',draft
 }
 const safe=(s:string)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\|/g,'\\|');
 export function targetedMarkdown(a:TargetedAssessment):string[]{
- const lines=['## Draft and targeted review','',a.complete?'Workflow complete; review is not proof of correctness.':'Workflow incomplete; available recommendation is provisional.',safe(a.reason),'',`Author: ${a.author} (low effort). Reviewer: ${a.reviewer} (medium effort).`,'',`Revision: ${a.revision}. Changed fields: ${a.changedFields.join(', ')||'none'}.`,'','### Final recommendation','',safe(a.final?.recommendation??'Unavailable'),''];
+ const lines=['## Draft and targeted review','',a.complete?'Workflow complete; review is not proof of correctness.':'Workflow incomplete; available recommendation is provisional.',safe(a.reason),'',`Author: ${a.author} (${providerFor(a.author).startsWith('ollama-')?'model default effort':'low effort'}). Reviewer: ${a.reviewer} (${providerFor(a.reviewer).startsWith('ollama-')?'model default effort':'medium effort'}).`,'',`Revision: ${a.revision}. Changed fields: ${a.changedFields.join(', ')||'none'}.`,'','### Final recommendation','',safe(a.final?.recommendation??'Unavailable'),''];
  if(a.final)lines.push('### Rationale','',safe(a.final.rationale),'','### Risks','',...(a.final.risks.length?a.final.risks.map(s=>'- '+safe(s)):['None declared.']),'','### Declared claims','',...a.final.claims.map(c=>`- **${c.id} — ${c.kind}:** ${safe(c.text)}`),'','### Next actions','',...a.final.nextSteps.map(s=>'- '+safe(s)),'');
  lines.push('### Reviewer findings','');
  for(const f of a.review?.findings??[])lines.push(`- **${safe(f.id)} / ${safe(f.claimId)} — ${f.severity}, ${f.category}:** ${safe(f.failureScenario)} Consequence: ${safe(f.consequence)} Correction: ${safe(f.correction)} Test: ${safe(f.acceptanceTest)}`);

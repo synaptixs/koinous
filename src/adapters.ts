@@ -1,4 +1,5 @@
 import {decisionContext,DECISION_SYSTEM} from './decision-context.ts';
+import {OllamaAdapter,isOllama} from './ollama.ts';
 import {modelAccounting} from './token-accounting.ts';
 import {validateParticipants,providerFor} from './participants.ts';
 import type {ParticipantId} from './participants.ts';
@@ -27,9 +28,9 @@ export class MockAdapter implements Adapter {
     }
     const topic=(prompt.match(/PROBLEM:\n([^\n]+)/)?.[1] || 'the technical question').slice(0,160);
     const peerSection=prompt.split('OTHER AGENTS LAST ROUND:\n')[1]?.split('\n\nROUND ')[0]??'';
-    const peers=([...peerSection.matchAll(/^(CODEX(?:-2)?|CLAUDE(?:-2)?|GROK):/gm)].map(m=>m[1].toLowerCase()) as ParticipantId[]).filter(id=>id!==this.id);
+    const peers=([...peerSection.matchAll(/^(CODEX(?:-2)?|CLAUDE(?:-2)?|GROK|OLLAMA-(?:LOCAL|CLOUD)(?:-2)?):/gm)].map(m=>m[1].toLowerCase()) as ParticipantId[]).filter(id=>id!==this.id);
     const reviews=[...new Set(peers)].map(peer=>({peer,decision:'unresolved',reason:'Mock critique: compare the proposed pilot against workload and service-quality evidence.'}));
-    const views: Record<AgentId,string>={codex:'implementation boundaries, testability, and integration cost', claude:'architecture tradeoffs, operational risk, and maintainability',grok:'counterexamples, hidden assumptions, and alternative approaches'};
+    const views: Record<AgentId,string>={codex:'implementation boundaries, testability, and integration cost', claude:'architecture tradeoffs, operational risk, and maintainability',grok:'counterexamples, hidden assumptions, and alternative approaches','ollama-local':'local feasibility and resource constraints','ollama-cloud':'alternative approaches and operational tradeoffs'};
     return {text: round===1?`**Mock ${this.id} independent position:** For “${topic}”, prioritize ${views[providerFor(this.id)]}.\n\n- Hypothesis: run a small controlled experiment first.\n- Evidence status: demonstration only; no actual model inference.\n- Next step: define acceptance tests and compare options.`
      :round===2?JSON.stringify({reviews,revisedView:'Mock revised view: use a reversible pilot with a stop condition.',openQuestions:['What evidence would justify a wider rollout?']})
 :JSON.stringify({comparison:{alternative:'Defer the pilot until demand is clearer.',tradeoff:'A pilot tests assumptions but consumes time; deferral avoids that effort while leaving demand unknown.',switchCondition:'Defer if the team cannot define a measurable success criterion or bound the pilot effort.'},revisions:reviews,direction:'pilot',recommendation:`Run a small reversible pilot of “${topic}” before committing.`,rationale:'Illustrative mock recommendation; validate assumptions with actual users.',risks:['Demand and feasibility remain untested.'],disagreements:['The evidence needed for a full commitment remains unresolved.'],claims:[{id:'a1',kind:'assumption',text:'A limited pilot can test demand and feasibility.',evidenceIds:[],snapshotId:null}],nextSteps:['Define a success criterion and a limited pilot.','Review results before a wider rollout.']}),usage:{inputTokens:0,outputTokens:0,usd:0}};
@@ -185,7 +186,7 @@ export function createAdapters(mode: string, providers: readonly ParticipantId[]
     const provider=providerFor(id);
     // One fresh SDK adapter (and therefore conversation) per participant. Only
     // authentication is shared; each call retains its own selected model/usage.
-    const adapter:Adapter=provider==='codex'?new CodexAdapter(undefined,selection.models[id],effort,decisionOnly):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id],anthropicEffort,decisionOnly):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
+    const adapter:Adapter=isOllama(provider)?new OllamaAdapter(provider,selection.models[id]!):provider==='codex'?new CodexAdapter(undefined,selection.models[id],effort,decisionOnly):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id],anthropicEffort,decisionOnly):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
     if(id===provider)return adapter;
     return {id,maxTotalTokensPerCall:adapter.maxTotalTokensPerCall,run:adapter.run.bind(adapter),...(adapter.prepare?{prepare:adapter.prepare.bind(adapter)}:{}),...(adapter.dispose?{dispose:adapter.dispose.bind(adapter)}:{})};
   });

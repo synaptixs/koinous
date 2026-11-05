@@ -28,7 +28,7 @@ export function positiveNumber(name: string, fallback: number, integer = true): 
   return value;
 }
 export function callTimeoutMs(agent: AgentId): number {
-  const value = positiveNumber(`${agent.toUpperCase()}_TIMEOUT_MS`, positiveNumber('MODEL_TIMEOUT_MS', 120_000));
+  const value = positiveNumber(`${agent.toUpperCase().replaceAll('-','_')}_TIMEOUT_MS`, positiveNumber('MODEL_TIMEOUT_MS', 120_000));
   if (value > 2_147_483_647) throw new Error('Model timeout exceeds timer range');
   return value;
 }

@@ -36,6 +36,11 @@ test('protected routes require authentication; headers and query strings cannot 
  assert.equal((await f.request('/api/health')).status,200);assert.equal(f.calls(),0);
  const audit=readFileSync(join(f.root,'security-audit.jsonl'),'utf8');assert.ok(!audit.includes(f.a));assert.ok(!audit.includes('evil.example'));
 });
+test('protected mode denies personal Ollama metadata access after authentication',async t=>{
+ const f=fixture(t);
+ const response=await f.request('/api/models?provider=ollama-local');assert.equal(response.status,403);assert.match(response.text,/tenant_provider_isolation_pending/);assert.equal(f.calls(),0);
+ const health=(await f.request('/api/health')).json();assert.ok(health.availableProviders.every((p:{id:string})=>!p.id.startsWith('ollama-')));
+});
 test('tenant isolation covers list, details, reports, SSE and mutations before and after restart',async t=>{
  const f=fixture(t);const created=await f.request('/api/sessions','POST',{prompt:'Alpha private idea',selection:{providers:['codex','claude']},tenant:'beta'},f.a,{'x-tenant-id':'beta'});
  assert.equal(created.status,201);const id=created.json().id;await f.complete(id);

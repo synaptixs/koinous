@@ -29,6 +29,129 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### User-selected name: synqo — 2026-11-05 (offline)
+
+The user selected **synqo**, superseding the provisional Riff display name below.
+UI/title, login, setup messages, new report titles and current documentation use
+the exact lowercase name. Repository URLs, package name, `KOINOUS_*` settings,
+protocol identifiers and saved sessions remain compatible. Historical records are
+preserved; no repository rename or data migration is part of this change.
+
+| Naming phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | User choice, clean tree, current naming surfaces, PKG impact | Passed |
+| Implement | 25% | synqo replaces provisional display name | Passed |
+| Verify | 25% | TypeScript, 590 Node tests and 33 Python tests; current-name scan | Passed |
+| Document | 25% | User choice and compatibility documented | Passed |
+
+PKG on clean 5dc2255: Ollama metadata request3 callers/0 docs; protected application
+6/1; subscription setup6/0; dashboardHtml2/0; evaluate module0/0. Request/setup
+queries include same-named unrelated matches; counts here identify the production
+symbols changed. No truncation; untraced TS/JS calls are not tracked. Entry-path
+gaps remain covered by existing offline auth/security/evaluation tests; no new
+logic or model calls were introduced. Raw measurements are outside the checkout.
+Final gate: `/private/tmp/synqo-name-check.log`. Overall 48.33%, P6 80% unchanged.
+
+### Riff branding and Ollama availability — 2026-11-05 (offline)
+
+| Follow-up phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | PKG impact, selection/discovery contracts, branding compatibility | Passed |
+| Implement | 25% | Ollama Cloud + Local section, installed-model local gate, Riff display name | Passed |
+| Verify | 25% | TypeScript, 590 Node + 33 Python tests; mock browser selection | Passed |
+| Document | 25% | Updated branding/setup and compatibility guidance | Passed |
+
+Riff is the working display name, with the tagline "Better ideas together".
+No name preference arrived while the independent Ollama work proceeded, so Riff
+was used as the reversible display choice. Repository/package identifiers,
+`KOINOUS_*` settings, protocol names, historical design records and saved sessions
+retain their existing identifiers. No repository rename or data migration occurs.
+
+The picker groups Ollama under **Ollama Cloud + Local**. Server-owned participant
+metadata declares the group and installed-model requirement; the UI does not infer
+these from filenames. Local slots start disabled until metadata refresh finds
+installed models. Both slots share the refreshed list. Unlisted local IDs cannot
+start a discussion, and removing all models or losing daemon access clears local
+selection. Cloud selection is independent of installed local weights and retains
+the existing signed-in daemon transport. Refresh does not perform inference or
+download models. Reopening saved local discussions still performs no discovery.
+
+Full offline gate passed: TypeScript, 590 Node tests and 33 Python tests. Three
+new UI regressions cover empty/installed lists, invented IDs, shared local slots,
+model removal, unavailable daemon and recovery. Browser mock verification confirmed
+the Riff title, combined section, initial local disablement, shared list refresh
+and Local/Cloud choices without starting a discussion. Gate log:
+`/private/tmp/riff-ollama-check.log`; screenshot outside the checkout:
+`/Users/falcon/projects/collab/deliverables/ollama-selection/riff-picker.png`.
+
+Pre-edit PKG on clean bbd5d29: createApplication18 callers/2 docs; UI refresh13/1;
+UI selection2/1; Ollama metadata request3/0; createProtectedApplication6/1;
+subscription setup6/0; dashboardHtml2/0; evaluate module0/0. No truncation;
+untraced TS/JS calls are not tracked and counts are floors. Regression gaps flag
+server/demo/start-real/secure-server/evaluate and UI entry paths; existing full
+gate, API/UI tests and mock browser exercise the applicable paths. The metadata
+request's qualified regression query was not found; its short-name query reports
+coverage with the server entry gaps above. Raw outputs remain outside the checkout.
+
+Overall stays 48.33%, P6 stays 80%; no inference, login or model downloads occurred.
+Live Ollama behavior and recommendation quality remain unverified. Delivery
+continues in PR #14, preserving the original Ollama iteration below.
+
+### Ollama selection iteration — 2026-11-04 (offline)
+
+| Ollama iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Official API contracts, existing selection and measured PKG impact | Passed |
+| Implement | 25% | Local/Cloud slots, metadata picker, native chat, saved/export compatibility | Passed |
+| Verify | 25% | Offline adapter/API/UI/security tests, full check, mock browser | Passed |
+| Document | 25% | Demo/live setup, auth, effort, accounting and limitations | Passed |
+
+The picker adds `ollama-local` / `ollama-cloud`, each with a second participant
+slot, retaining all old IDs and default participants. Both use the local loopback
+Ollama daemon; Cloud delegates login to `ollama signin`. No API keys or new SDK
+dependencies. Explicit Refresh reads `/api/tags` only; mock Refresh is entirely
+synthetic. Listings are bounded (200 of the reported total), omit unsupported
+metadata with a count, and do not download models or verify quota. `/api/show`
+checks location metadata and completion capability before each fresh text-only
+chat; model suffixes do not determine routing. Non-official remote hosts refuse.
+Protected tenant routes deny access to the personal daemon. Original provider
+defaults and existing saved evidence remain compatible.
+
+Ollama uses model default effort, surfaced in UI and Markdown rather than claiming
+OpenAI/Claude effort enforcement. Native prompt/output counters enter the existing
+canonical token accounting; cache is a subset, costs and unreported helpers stay
+unknown. The existing engine owns latency, deadlines, cancellation, stop-on-failure
+and conditional revision. No extra synthesis or retry call is introduced. Live
+Ollama behavior, entitlements and recommendation quality remain unverified.
+
+Impact measured against clean main aa94689 in an isolated worktree (including a
+repeat after editing to ensure the same source baseline): providerFor13 callers,
+validateParticipants3, modelDefaults3, defaultParticipants1, resolveSelection17,
+validateProviders1/1 doc, configuredProviders9/1 doc, enabledProviders4,
+createAdapters15, MockAdapter.run1/3 docs, Engine.create42/1 doc,
+createApplication16/2 docs, createProtectedApplication6/1 doc, historyQuery10/1 doc,
+targetedMarkdown2, UI refresh10/1 doc, WorkerProfiles8/2 docs, workerEnvironment5,
+callTimeoutMs8, preparePersonalDiscussion6. AgentId/ProfileOwner each have zero
+bound creators; AGENTS/PARTICIPANT_PROVIDERS constants are not graph nodes, so
+their uses were confirmed by text search. No truncation; TS/JS untraced calls are
+not tracked and counts are floors. Regression gaps flag server, secure-server,
+demo/start-real/evaluate and UI entry paths. Offline API/UI/startup/security
+regressions exercise applicable behavior; benchmark arms are unchanged. Raw
+measurements and the working plan are outside the checkout under notes.
+
+Offline gate: TypeScript, 587 Node tests and 33 Python tests passed with inference
+disabled. The 18 added regressions cover routing, metadata-only discovery, bounded
+output, abort, unknown/partial counters, targeted saved exports, mixed selections,
+UI choices and protected-mode refusal. Mock browser verification selected Local
+and Cloud demo models through Refresh and confirmed the matching IDs and effort
+labels; no discussion was started. Gate log: `/private/tmp/koinous-ollama-check.log`.
+Screenshot: `/Users/falcon/projects/collab/deliverables/ollama-selection/picker.png`
+(outside the checkout).
+
+Overall 48.33% and P6 80% do not move. No inference, login, install or model pull
+was performed for this iteration. This is a picker/integration change, not empirical
+acceptance or authorization to resume the cache-policy experiment.
+
 ### Targeted review iteration — 2026-11-04 (offline)
 
 New UI default: one author draft, one targeted review, conditional author revision.

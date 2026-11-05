@@ -33,7 +33,7 @@ test('API rejects invalid selections and authentication overrides before creatin
 });
 test('API exposes defaults and script; concurrent discussions retain independent rosters/models, events and reports',async t=>{
  const {request,finished,invocations,outputDir}=setup(t);
- const health=(await request('/api/health')).json();assert.equal(health.availableProviders.length,3);assert.deepEqual(health.agents,['codex','claude']);assert.equal(health.availableProviders[0].defaultModel,'default-codex');
+ const health=(await request('/api/health')).json();assert.equal(health.availableProviders.length,5);assert.deepEqual(health.agents,['codex','claude']);assert.equal(health.availableProviders[0].defaultModel,'default-codex');
  assert.match((await request('/')).text,/script src="\/app.js"/);assert.match((await request('/app.js')).text,/Choose at least two/);
  const choices=[{providers:['codex','claude'],models:{codex:'model-one',claude:'claude-one'}},{providers:['codex','grok'],models:{codex:'model-two',grok:'grok-two'}}];
  const responses=await Promise.all(choices.map(selection=>request('/api/sessions','POST',{prompt:'Synthetic',maxRounds:3,selection})));
@@ -142,7 +142,7 @@ test('configured disabled Grok is hidden and rejected before dispatch while save
  const old=process.env.KOINOUS_DISABLED_PROVIDERS;process.env.KOINOUS_DISABLED_PROVIDERS='grok';
  t.after(()=>{if(old===undefined)delete process.env.KOINOUS_DISABLED_PROVIDERS;else process.env.KOINOUS_DISABLED_PROVIDERS=old;});
  const {request,invocations,app}=setup(t);
- const health=(await request('/api/health')).json();assert.deepEqual(health.availableProviders.map((p:{id:string})=>p.id),['codex','claude']);
+ const health=(await request('/api/health')).json();assert.deepEqual(health.availableProviders.map((p:{id:string})=>p.id),['codex','claude','ollama-local','ollama-cloud']);
  const rejected=await request('/api/sessions','POST',{prompt:'Synthetic',selection:{providers:['codex','grok']}});
  assert.equal(rejected.status,400);assert.match(rejected.text,/disabled/);assert.equal(invocations.length,0);assert.equal(app.engine.sessions.size,0);
  assert.deepEqual(resolveSelection({providers:['codex','grok']},{providers:['codex','grok'],models:{}}).providers,['codex','grok']);
@@ -163,13 +163,13 @@ test('disabling Grok preserves reopening an existing saved Grok discussion',asyn
 test('API accepts two OpenAI model slots and applies provider disabling to aliases before dispatch',async t=>{
  const old=process.env.KOINOUS_DISABLED_PROVIDERS;process.env.KOINOUS_DISABLED_PROVIDERS='grok';t.after(()=>{if(old===undefined)delete process.env.KOINOUS_DISABLED_PROVIDERS;else process.env.KOINOUS_DISABLED_PROVIDERS=old;});
  const {request,finished,invocations,app}=setup(t);
- const health=(await request('/api/health')).json();assert.deepEqual(health.availableParticipants.map((p:{id:string})=>p.id),['codex','claude','codex-2','claude-2']);
+ const health=(await request('/api/health')).json();assert.deepEqual(health.availableParticipants.map((p:{id:string})=>p.id),['codex','claude','codex-2','claude-2','ollama-local','ollama-local-2','ollama-cloud','ollama-cloud-2']);
  const selection={providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}};
  for(const models of [{},{codex:'same','codex-2':'same'}])assert.equal((await request('/api/sessions','POST',{prompt:'Synthetic',selection:{providers:selection.providers,models}})).status,400);
  assert.equal(app.engine.sessions.size,0);
  const created=await request('/api/sessions','POST',{prompt:'Synthetic',selection});assert.equal(created.status,201);
  const s=await finished(created.json().id);assert.equal(s.calls,6);assert.deepEqual(s.participants,selection.providers);assert.equal(invocations.filter(i=>i.id==='codex-2'&&i.model==='model-b').length,3);
- process.env.KOINOUS_DISABLED_PROVIDERS='claude,grok';
+ process.env.KOINOUS_DISABLED_PROVIDERS='claude,grok,ollama-local,ollama-cloud';
  const onlyOpenAI=(await request('/api/health')).json();assert.deepEqual(onlyOpenAI.availableProviders.map((p:{id:string})=>p.id),['codex']);assert.deepEqual(onlyOpenAI.availableParticipants.map((p:{id:string})=>p.id),['codex','codex-2']);
  const rejected=await request('/api/sessions','POST',{prompt:'Synthetic',selection:{providers:['codex','claude-2'],models:{}}});assert.equal(rejected.status,400);assert.match(rejected.text,/disabled/);
 });

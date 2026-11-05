@@ -15,12 +15,12 @@ function modelId(value: unknown): string {
 }
 
 export function modelDefaults(env: NodeJS.ProcessEnv = process.env): Record<AgentId, string> {
-  return {codex: modelId(env.CODEX_MODEL || ''), claude: modelId(env.CLAUDE_MODEL || ''), grok: modelId(env.GROK_BUILD_MODEL || 'grok-4.7')};
+  return {codex: modelId(env.CODEX_MODEL || ''), claude: modelId(env.CLAUDE_MODEL || ''), grok: modelId(env.GROK_BUILD_MODEL || 'grok-4.7'),'ollama-local':modelId(env.OLLAMA_LOCAL_MODEL||''),'ollama-cloud':modelId(env.OLLAMA_CLOUD_MODEL||'')};
 }
 
 export function defaultParticipants():ParticipantId[] {
   const providers=configuredProviders();
-  return providers.length===1&&providers[0]!=='grok'?[providers[0],providers[0]==='codex'?'codex-2':'claude-2']:providers;
+  return providers.length===1&&providers[0]!=='grok'?[providers[0],`${providers[0]}-2` as ParticipantId]:providers;
 }
 
 // Only server UI defaults may contain unfinished model choices. Dispatch and
@@ -44,6 +44,7 @@ export function resolveSelection(input: unknown, defaults: Selection = {provider
     models[id] = modelId(requestedModel === undefined || requestedModel === '' ? defaults.models[id] || '' : requestedModel);
   }
   for(const id of providers) {
+    if(!allowUnspecifiedModels&&providerFor(id).startsWith('ollama-')&&!models[id])throw Error('Choose an explicit Ollama model ID');
     const peers=providers.filter(other=>other!==id&&providerFor(other)===providerFor(id));
     if(peers.length&&((!allowUnspecifiedModels&&(!models[id]||peers.some(other=>!models[other])))||peers.some(other=>models[id]&&models[other]===models[id])))throw Error('Participants using the same provider require two explicit, different model IDs');
   }

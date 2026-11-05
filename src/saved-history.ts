@@ -1,5 +1,5 @@
 import {providerFor} from './participants.ts';
-import {AGENTS} from './core.ts';
+import {SUPPORTED_PROVIDERS} from './core.ts';
 import type {AgentId} from './core.ts';
 import type {SavedSummary} from './saved-sessions.ts';
 
@@ -7,7 +7,7 @@ export function historyQuery(params:URLSearchParams){
  const q=(params.get('q')??'').trim();
  if(q.length>200)throw Error('Search must be at most 200 characters');
  const provider=(params.get('provider')??'').trim(),model=(params.get('model')??'').trim();
- if(provider&&!AGENTS.includes(provider as AgentId))throw Error('Choose a supported provider');
+ if(provider&&!SUPPORTED_PROVIDERS.includes(provider as AgentId))throw Error('Choose a supported provider');
  if(model&&(model.length>128||!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(model)))throw Error('Invalid requested model ID');
  const date=(key:string)=>{
   const value=params.get(key)??'';if(!value)return '';

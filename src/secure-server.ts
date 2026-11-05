@@ -1,3 +1,4 @@
+import {AGENTS,PROVIDER_LABELS} from './core.ts';
 import {SDKWorkers} from './sdk-worker.ts';
 import {WorkerProfiles} from './worker-profiles.ts';
 import {ProfileWorkers} from './profile-worker.ts';
@@ -74,7 +75,7 @@ export function createProtectedApplication(options:Options){
    if(browser&&!principal&&req.method==='GET'&&url.pathname==='/'){
     audit.record({action:'auth.page',decision:'allow',reason:'public_login_page'});
     res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; base-uri 'none'; frame-ancestors 'none'",'Referrer-Policy':'no-referrer'});
-    return res.end('<!doctype html><title>Koinous login</title><h1>Koinous</h1><p>Sign in to review your organization’s discussions.</p><a href="/auth/login">Enterprise sign in</a>');
+    return res.end('<!doctype html><title>synqo login</title><h1>synqo</h1><p>Sign in to review your organization’s discussions.</p><a href="/auth/login">Enterprise sign in</a>');
    }
    if(browserSession&&req.method!=='GET'&&(req.headers.origin!==origin||req.headers['x-csrf-token']!==browserSession.csrf))return deny(403,'csrf_denied');
    if(!principal)return deny(401,'authentication_required');
@@ -119,9 +120,10 @@ export function createProtectedApplication(options:Options){
     forwarded=Object.assign(Readable.from([data]),{url:req.url,method:req.method,headers:req.headers}) as IncomingMessage;
    }
    audit.record({subject:principal.subject,tenant:principal.tenant,action,resource,decision:'allow',reason:'authenticated_access_attempt'});
+   if(url.pathname==='/api/models')return deny(403,'tenant_provider_isolation_pending');
    if(req.method==='GET'&&url.pathname==='/api/health'){
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    return res.end(JSON.stringify({status:'ok',mode,authentication:browserSession?'browser-session':'application-bearer',providerAuthentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock',uiSupported:!!browser,agents:configuredProviders(),availableProviders:enabledProviders().map(id=>({id,label:({codex:'OpenAI Codex',claude:'Anthropic Claude',grok:'Grok Build'})[id],defaultModel:modelDefaults()[id]||''}))}));
+    return res.end(JSON.stringify({status:'ok',mode,authentication:browserSession?'browser-session':'application-bearer',providerAuthentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock',uiSupported:!!browser,agents:configuredProviders(),availableProviders:enabledProviders().filter(id=>(AGENTS as readonly string[]).includes(id)).map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:modelDefaults()[id]||''}))}));
    }
    if(browser&&req.method==='GET'&&url.pathname==='/'){
     const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8').replace('<script src="/app.js"','<script src="/browser-session.js"></script><script src="/app.js"');
@@ -144,7 +146,7 @@ if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.u
  const configPath=process.env.KOINOUS_SECURITY_CONFIG;if(!configPath)throw Error('KOINOUS_SECURITY_CONFIG is required');
  const config=JSON.parse(readFileSync(configPath,'utf8'));
  const app=createProtectedApplication({...config,mode:'real'});
- const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`Koinous protected review API at http://${app.host}:${app.port}; inference disabled`));
+ const server=createServer(app.handler).listen(app.port,app.host,()=>console.log(`synqo protected review API at http://${app.host}:${app.port}; inference disabled`));
  const stop=()=>{server.close();void app.shutdown().finally(()=>server.closeAllConnections());};
  process.on('SIGINT',stop);process.on('SIGTERM',stop);
 }

@@ -1,10 +1,10 @@
 import {constants,closeSync,fstatSync,lstatSync,openSync,readFileSync,writeFileSync,realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {AGENTS} from './core.ts';
-import type {AgentId} from './core.ts';
 import type {Identity} from './browser-auth.ts';
 import {privateDirectory} from './security.ts';
-export type ProfileOwner=Identity&{provider:AgentId};
+// Ollama's personal daemon is not a tenant-isolated worker transport.
+export type ProfileOwner=Identity&{provider:typeof AGENTS[number]};
 export type WorkerProfile=Readonly<ProfileOwner&{root:string;home:string;login:string;workspace:string;tmp:string}>;
 const id=(v:unknown)=>typeof v==='string'&&/^[a-zA-Z0-9_-]{1,64}$/.test(v);
 export class WorkerProfiles {
@@ -19,7 +19,7 @@ export class WorkerProfiles {
   }
   for(const p of configured){
    const base=join(root,'credential-profiles'),tenant=join(base,p.tenant),user=join(tenant,p.subject),path=join(user,p.provider);
-   const home=join(path,'home'),login=join(home,({codex:'.codex',claude:'.claude',grok:'.grok'})[p.provider as AgentId]);
+   const home=join(path,'home'),login=join(home,({codex:'.codex',claude:'.claude',grok:'.grok'})[p.provider as ProfileOwner['provider']]);
    for(const dir of [base,tenant,user,path,home,login,join(path,'workspace'),join(path,'tmp')])privateDirectory(dir);
    const owner={version:1,tenant:p.tenant,subject:p.subject,provider:p.provider},file=join(path,'owner.json');
    try{const fd=openSync(file,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,JSON.stringify(owner));}finally{closeSync(fd);}}catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;}

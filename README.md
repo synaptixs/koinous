@@ -1,8 +1,8 @@
-# Koinous · Shared inquiry
+# synqo · Better ideas together
 
 **Discuss an idea with multiple models, compare their reasoning, and keep the disagreements visible.**
 
-Koinous is a local-first application for a bounded discussion between two or three
+synqo (formerly Koinous) is a local-first application for a bounded discussion between two or three
 model participants. Start with an idea, optionally add context, then review an
 attributed recommendation, alternatives, risks, and next steps.
 
@@ -12,6 +12,9 @@ attributed recommendation, alternatives, risks, and next steps.
 > discussions have been exercised, but they do not establish general reliability,
 > better answers, or production readiness. Enterprise hardening and PKG integration
 > remain deferred. See [Current status](#current-status).
+
+The repository/package name and `KOINOUS_*` settings retain their existing names
+for compatibility. Saved discussions continue to open unchanged.
 
 ## Quick start
 
@@ -87,12 +90,47 @@ Follow [the live setup guide](DEMO.md#use-your-own-subscriptions-for-real-discus
 for account setup and manual controls. Advanced Grok runtime instructions are in the
 [engineering reference](REFERENCE.md#grok-build-subscription-adapter-inference-requires-explicit-opt-in).
 
+### Ollama Cloud + Local
+
+**Ollama Cloud + Local** is one section in the model picker, with separate
+cloud and local participant slots. Both use
+your local Ollama app/API. Local models run on your machine; Cloud sends prompts to
+Ollama Cloud using `ollama signin`, with no API key stored in synqo.
+See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
+
+1. Install/start [Ollama](https://ollama.com/download) and add the models you want
+   in Ollama first. For Cloud, sign in with `ollama signin`.
+2. For a mock walkthrough, use `npm run demo`; **Refresh models** returns labeled
+   demo choices without contacting Ollama.
+3. For real Ollama-only discussions, install dependencies once with `npm ci`, then:
+
+   ```sh
+   npm run start:real -- --enable-inference --ollama-only
+   ```
+
+4. Open **http://127.0.0.1:3030**. Select two participants, click **Refresh models**
+   under Local or Cloud, then choose a registered model. Local selection unlocks
+   only after an installed model is found; entering an unlisted local ID cannot
+   start a discussion.
+   Two local models or two cloud models can use the second participant slot.
+5. Choose the author and start the discussion when ready to use model resources.
+   The normal Codex + Claude live launcher also exposes Ollama for mixed pairings.
+   OpenAI-only mode keeps other providers disabled.
+
+Refresh lists only models registered with your daemon; it does not download models,
+check Cloud quota or send an inference prompt. synqo verifies Local/Cloud metadata
+before a chat. Ollama uses **model default effort**, which may differ across models.
+Token counts and latency appear in the existing UI and exports; missing usage and
+USD remain unknown. No Ollama live acceptance run has been performed.
+See [Ollama setup and troubleshooting](DEMO.md#ollama-cloud--local).
+
 ## How it works
 
-**Draft + targeted review is the UI default.** Select exactly two OpenAI/Claude
-participants and choose the author. The author runs at low effort and the reviewer
-at medium effort; the preset selects Sonnet 5.5 and Astra. Model availability still
-depends on your subscription. Optional acceptance checks define what a sound answer
+**Draft + targeted review is the UI default.** Select exactly two OpenAI, Claude or
+Ollama participants and choose the author. OpenAI/Claude authors use low effort and
+reviewers medium; Ollama uses model default effort. The preset selects Sonnet 5.5
+and Astra. Model availability depends on the provider and your account/local setup.
+Optional acceptance checks define what a sound answer
 must get right.
 
 | Stage | What happens | Application calls |
@@ -102,7 +140,9 @@ must get right.
 | Conditional revision | Author responds only when material actionable findings exist | 0 or 1 |
 
 Each stage uses a fresh request with bounded task/draft/finding data. Targeted
-requests use an empty working directory and text-only instructions. No full
+OpenAI/Claude requests use an empty working directory; Ollama uses fresh text-only
+chats without tools or imported SDK history. Custom Ollama model templates and
+system defaults still apply. No full
 conversation history, extra judge, synthesis or automatic repair/retry call is
 added. Malformed responses stop the workflow and preserve originals. Cosmetic-only
 feedback keeps the original draft. Authors can address, reject or leave findings
