@@ -46,6 +46,7 @@ const $ = id => document.getElementById(id);
 let sessionId = null, events = null, ready = false, busy = false, inferenceEnabled = false, webSearchAvailable = false;
 const rows = [];
 let participantOptions = [], providerOptions = [], nextRow = 0;
+let cloudSetup = null;
 const modelLists = new Map(), modelQueries = new Map();
 let workflowProgress = null;
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
@@ -68,9 +69,10 @@ function refresh(preferredAuthor) {
   renderWorkflowFlow();
   const missingOllama=selected.some(row=>row.modelDiscovery&&!(row.model.value.trim()||row.defaultModel));
   const unavailableLocal=selected.some(row=>row.requiresInstalledModel&&!row.availableModels.includes(row.model.value.trim()||row.defaultModel));
+  const pendingCloudSetup=selected.some(row=>row.provider==='ollama-cloud'&&cloudSetup?.examples.some(example=>example.model===row.model.value.trim())&&!row.availableModels.includes(row.model.value.trim()));
   const unavailableResearch=['web','both'].includes($('researchMode').value)&&!webSearchAvailable;
   const unavailableParticipant=rows.some(row=>!row.id||!participantOptions.some(option=>option.id===row.id));
-  const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
+  const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : pendingCloudSetup ? 'Register the selected cloud setup example in Ollama, then Refresh models to confirm it.' : missingOllama ? 'Choose an explicit Ollama model ID; Refresh models lists registered choices.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : '';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
   $('run').disabled = busy || !!error || !inferenceEnabled;
   $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
@@ -88,12 +90,14 @@ function refresh(preferredAuthor) {
     row.title.textContent='Participant '+number;
     row.providerSelect.setAttribute('aria-label','Participant '+number+' provider');
     row.model.setAttribute('aria-label','Participant '+number+' model ID');
-    row.modelPicker.setAttribute('aria-label','Participant '+number+' registered models');
+    row.modelPicker.setAttribute('aria-label','Participant '+number+(row.provider==='ollama-cloud'?' cloud models':' registered models'));
     row.refreshModels.setAttribute('aria-label','Refresh models for participant '+number);
     row.remove.setAttribute('aria-label','Remove participant '+number);
-    row.providerSelect.disabled=busy;row.model.disabled=busy||!row.id;row.modelPicker.disabled=busy||!row.id;
+    row.providerSelect.disabled=busy;row.model.disabled=busy||!row.id;row.modelPicker.disabled=busy||!row.id||(row.provider==='ollama-cloud'&&cloudSetup&&!cloudSetup.endpoint);
     row.refreshModels.disabled=busy||modelQueries.has(row.provider);
     row.remove.hidden=rows.length<=2;row.remove.disabled=busy;
+    row.modelPicker.value=row.model.value.trim();
+    renderCloudSetup(row);
     for(const option of row.providerSelect.children)if(option.value)option.disabled=(targeted&&option.value==='grok')||!participantOptions.some(candidate=>candidate.provider===option.value&&!rows.some(other=>other!==row&&other.id===candidate.id));
   }
   $('plannedCalls').textContent = targeted?3:chosen.providers.length * Number($('rounds').value);
@@ -279,14 +283,26 @@ function participantLabel(row) {
   const label=providerOptions.find(option=>option.id===row.provider)?.label||row.id||'Choose provider';
   return 'Participant '+(rows.indexOf(row)+1)+' · '+label+' · '+(row.model.value.trim()||row.defaultModel||'SDK default');
 }
+function renderCloudSetup(row) {
+  row.cloudHelp.hidden=row.provider!=='ollama-cloud';
+  const example=cloudSetup?.examples.find(item=>item.model===row.model.value.trim());
+  row.modelPageLink.hidden=!example;row.modelPageLink.href=example?.url||'';
+  row.commands.hidden=!example||!cloudSetup?.endpoint;
+  row.commands.textContent=example&&cloudSetup?.endpoint?[cloudSetup.signInCommand,example.registerCommand,cloudSetup.listCommand].join('\n'):'';
+  row.cloudHint.textContent=!cloudSetup?'Browse Ollama’s cloud catalog and register a cloud model in your local Ollama app, then Refresh models.':!cloudSetup.endpoint?'The configured Ollama endpoint is invalid. Fix KOINOUS_OLLAMA_URL before using these setup instructions.':example?(row.availableModels.includes(example.model)?'This model is registered on the configured daemon. Account access and quota are not verified.':'Run these commands in your terminal: sign in if needed, register the cloud reference, then return here and Refresh models. Selecting an example sends no prompt.'):'Choose a “Set up” model from the Cloud models list to see its registration commands. '+(cloudSetup.scope||'Setup examples are separate from registered models.')+(cloudSetup.verifiedOn?' Examples checked '+cloudSetup.verifiedOn+'.':'');
+}
+function populateModelPicker(row) {
+  row.modelPicker.replaceChildren();const placeholder=viewNode('option',row.provider==='ollama-cloud'?'Choose a cloud model':'Choose a registered model');placeholder.value='';row.modelPicker.append(placeholder);
+  for(const id of row.availableModels){const option=viewNode('option',(row.provider==='ollama-cloud'?'Registered · ':'')+id);option.value=id;row.modelPicker.append(option);}
+  if(row.provider==='ollama-cloud')for(const example of cloudSetup?.examples||[])if(!row.availableModels.includes(example.model)){const option=viewNode('option','Set up · '+example.label+' · '+example.model);option.value=example.model;row.modelPicker.append(option);}
+  row.modelPicker.value=row.model.value;
+}
 function showModelChoices(provider,data) {
   modelLists.set(provider,data);
   for(const row of rows.filter(r=>r.provider===provider)){
     row.availableModels=[...data.models];
-    row.modelPicker.replaceChildren();const placeholder=viewNode('option','Choose a registered model');placeholder.value='';row.modelPicker.append(placeholder);
-    for(const id of data.models){const option=viewNode('option',id);option.value=id;row.modelPicker.append(option);}
-    row.modelPicker.value=data.models.includes(row.model.value)?row.model.value:'';
-    row.modelStatus.textContent=(data.source==='mock'?'Demo models. ':'')+data.models.length+' of '+data.total+' registered models'+(data.truncated?' (list truncated)':'')+'. '+(data.unsupported?data.unsupported+' unsupported entries omitted. ':'')+(row.requiresInstalledModel&&!data.models.length?'No local models installed; choose another provider or refresh after installing one. ':'')+'No inference requested.';
+    populateModelPicker(row);
+    row.modelStatus.textContent=(data.source==='mock'?'Demo models. ':'')+data.models.length+' of '+data.total+' registered models'+(data.truncated?' (list truncated)':'')+'. '+(data.unsupported?data.unsupported+' unsupported entries omitted. ':'')+(row.requiresInstalledModel&&!data.models.length?'No local models installed; choose another provider or refresh after installing one. ':provider==='ollama-cloud'&&!data.models.length?'No cloud models registered on this daemon. Use the setup help below. ':'')+'No inference requested.';
   }
 }
 function configureParticipant(row,capability,modelValue) {
@@ -296,7 +312,7 @@ function configureParticipant(row,capability,modelValue) {
   row.model.placeholder=row.defaultModel||(row.modelDiscovery?'Choose or enter a registered model ID':'SDK default');
   row.note.textContent=row.modelDiscovery?(row.requiresInstalledModel?'Local models must be installed on this machine.':'Cloud processing via signed-in Ollama.')+' Refresh lists registered models without inference. Uses model default effort.':'Default: '+(row.defaultModel||'SDK default')+(row.provider==='grok'?' · Build runtime must be configured':'');
   row.discovery.hidden=!row.modelDiscovery;
-  row.modelPicker.replaceChildren();const placeholder=viewNode('option','Refresh to list registered models');placeholder.value='';row.modelPicker.append(placeholder);
+  row.pickerLabel.textContent=row.provider==='ollama-cloud'?'Cloud models':'Registered models';populateModelPicker(row);
   row.modelStatus.textContent='No model list requested.';
   if(modelLists.has(row.provider))showModelChoices(row.provider,modelLists.get(row.provider));
 }
@@ -311,8 +327,15 @@ function addParticipant(capability,modelValue) {
   const refreshModels=viewNode('button','Refresh models','secondary');refreshModels.type='button';
   const modelStatus=viewNode('small','No model list requested.');modelStatus.setAttribute('role','status');
   discovery.append(pickerLabel,modelPicker,refreshModels,modelStatus);
+  const cloudHelp=viewNode('section',undefined,'ollama-cloud-help'),helpTitle=viewNode('h4','Find and register a cloud model');
+  const cloudHint=viewNode('p'),commands=viewNode('pre',undefined,'ollama-setup-commands');
+  const catalogLink=viewNode('a','Browse all cloud models');catalogLink.href=cloudSetup?.catalogUrl||'https://ollama.com/search?c=cloud';catalogLink.target='_blank';catalogLink.rel='noopener noreferrer';
+  const docsLink=viewNode('a','Ollama setup guide');docsLink.href=cloudSetup?.docsUrl||'https://docs.ollama.com/cloud';docsLink.target='_blank';docsLink.rel='noopener noreferrer';
+  const modelPageLink=viewNode('a','Selected model details');modelPageLink.target='_blank';modelPageLink.rel='noopener noreferrer';
+  const links=viewNode('div',undefined,'ollama-setup-links');links.append(catalogLink,modelPageLink,docsLink);
+  cloudHelp.append(helpTitle,cloudHint,commands,viewNode('small','Keep Ollama running. Commands target the same daemon as synqo. Cloud models run remotely; registration does not start a conversation.'),links);discovery.append(cloudHelp);
   const remove=viewNode('button','Remove','secondary');remove.type='button';
-  const row={card,title,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,remove};rows.push(row);
+  const row={card,title,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,remove,cloudHelp,commands,cloudHint,modelPageLink,pickerLabel};rows.push(row);
   configureParticipant(row,capability,modelValue);card.append(title,providerLabel,providerSelect,modelLabel,model,note,discovery,remove);$('participantChoices').append(card);
   providerSelect.onchange=()=>{
     if(busy)return;
@@ -334,7 +357,7 @@ function addParticipant(capability,modelValue) {
       if(modelQueries.get(provider)===query)showModelChoices(provider,data);
     }catch(error){
       modelLists.delete(provider);
-      for(const other of rows.filter(r=>r.provider===provider)){other.availableModels=[];other.modelPicker.replaceChildren();other.modelStatus.textContent=error.message;}
+      for(const other of rows.filter(r=>r.provider===provider)){other.availableModels=[];populateModelPicker(other);other.modelStatus.textContent=error.message;}
     }finally{if(modelQueries.get(provider)===query)modelQueries.delete(provider);refresh();}
   };
   return row;
@@ -353,6 +376,7 @@ function setParticipants(chosen) {
 const configurationReady = fetch('/api/health').then(async response => {
   if (!response.ok) throw Error('Configuration unavailable');
   const health = await response.json();
+  cloudSetup=health.ollamaCloudSetup||null;
   inferenceEnabled = health.mode === 'mock' || health.inferenceEnabled === true;
   webSearchAvailable=health.research?.web===true;
   for(const option of $('researchMode').children)if(['web','both'].includes(option.value))option.disabled=!webSearchAvailable;
