@@ -101,12 +101,13 @@ test('Ollama slots support mixed providers and distinct same-provider models wit
 test('model-list API is metadata-only with inference disabled; mock mode never contacts Ollama',async t=>{
  environment(t);let metadataCalls=0;
  const app=createApplication({mode:'real',outputDir:directory(t),ollamaFetch:async url=>{metadataCalls++;assert.ok(String(url).endsWith('/api/tags'));return json({models:[{name:'local:small'},{name:'alias',...remote}]});}});t.after(()=>app.shutdown());
- const health=(await request(app,'/api/health')).json();assert.equal(health.availableProviders.length,5);assert.equal(health.inferenceEnabled,false);assert.equal(health.availableParticipants.filter((p:{modelDiscovery:boolean})=>p.modelDiscovery).length,4);
- for(const participant of health.availableParticipants.filter((p:{modelDiscovery:boolean})=>p.modelDiscovery)){assert.equal(participant.group,'ollama');assert.equal(participant.requiresInstalledModel,participant.provider==='ollama-local');}
+ const health=(await request(app,'/api/health')).json();assert.equal(health.availableProviders.length,5);assert.equal(health.inferenceEnabled,false);assert.ok(health.availableParticipants.every((p:{modelDiscovery:boolean})=>p.modelDiscovery));
+ const ollamaParticipants=health.availableParticipants.filter((p:{group:string})=>p.group==='ollama');assert.equal(ollamaParticipants.length,4);
+ for(const participant of ollamaParticipants){assert.equal(participant.requiresInstalledModel,participant.provider==='ollama-local');}
  const result=await request(app,'/api/models?provider=ollama-cloud');assert.equal(result.status,200);assert.deepEqual(result.json().models,['alias']);assert.equal(metadataCalls,1);assert.equal(app.engine.sessions.size,0);
  process.env.KOINOUS_DISABLED_PROVIDERS='ollama-cloud';assert.equal((await request(app,'/api/models?provider=ollama-cloud')).status,400);assert.equal(metadataCalls,1);
  const mock=createApplication({mode:'mock',outputDir:directory(t),ollamaFetch:async()=>{throw Error('must never fetch');}});t.after(()=>mock.shutdown());
- assert.equal((await request(mock,'/api/models?provider=ollama-local')).json().source,'mock');assert.equal((await request(mock,'/api/models?provider=codex')).status,400);
+ assert.equal((await request(mock,'/api/models?provider=ollama-local')).json().source,'mock');assert.equal((await request(mock,'/api/models?provider=codex')).json().source,'mock');
 });
 test('targeted Ollama workflow, saved reopening, filters and exports preserve models and accounting',async t=>{
  environment(t);const root=directory(t);const draft={recommendation:'Test a bounded pilot.',rationale:'Assumption: demand can be tested.',claims:[],risks:['Unknown demand.'],nextSteps:['Owner: define a stop condition.']};

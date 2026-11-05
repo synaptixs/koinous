@@ -14,8 +14,9 @@ account. It checks only Codex; Claude and Grok are disabled, with no API-key
 fallback. An existing login is reused, so confirm it is the intended corporate
 account before starting. synqo does not select an enterprise workspace for you.
 
-In the UI, enter **two different model IDs** available through that account,
-one for each OpenAI participant. The default targeted workflow uses a low-effort
+In the UI, click **Load models**, then choose **two different model IDs** from the
+dropdowns, one for each OpenAI participant. Both model fields begin empty. The
+default targeted workflow uses a low-effort
 author, a medium-effort reviewer and a conditional low-effort revision (two or three
 calls). Choose the author in the UI. Full discussion remains available for the
 earlier three-round, six-response exchange. Each participant retains its selected
@@ -24,8 +25,14 @@ local subscription login. Start discussion sends prompts; setup sends none.
 Stop with Ctrl+C when finished.
 
 Your organization must allow Codex and both requested models. Login status is
-not an entitlement or quota check. No model list is invented or automatically
-probed, and a rejected model stops the discussion without fallback or retries.
+not an entitlement or quota check. Catalogs are read only when you click
+**Load models** or **Refresh models**, using the pinned CLI's metadata protocol
+without a prompt. Provider catalogs can include models unavailable to your account;
+a rejected model stops the discussion without fallback or retries.
+**Enter a custom model ID** allows an explicit account-specific choice absent from
+the catalog. A blank model blocks a new UI discussion; no SDK/server default is
+substituted. Existing saved records, including older blank-model records, remain
+readable without starting provider discovery.
 Different requested IDs can be aliases; synqo cannot prove distinct underlying
 models when the provider does not report their resolved identities. Two models
 from one provider are not independent evidence of correctness. Subscription USD
@@ -50,8 +57,9 @@ before starting the existing live UI. Complete the provider browser sign-ins you
 No API-key fallback, credentials copied into the project, or model prompts during
 setup. Login status confirms the method, not quota or model access. Grok stays off.
 
-Open the localhost URL printed in the terminal. Select models available to your
-personal or enterprise accounts, enter an idea, keep Draft + targeted review, choose the author,
+Open the localhost URL printed in the terminal. Click **Load models** in each row
+and choose a model from its dropdown. No model is selected automatically. Enter an
+idea, keep Draft + targeted review, choose the author,
 and click Start discussion. Only
 that click sends model prompts and uses provider account quota. Stop with Ctrl+C to
 end the server's inference opt-in. Startup errors stop without automatic retries.
