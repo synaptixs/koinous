@@ -10,10 +10,10 @@ import type {ParticipantId} from '../src/participants.ts';
 import type {CatalogProvider,ModelCatalog} from '../src/model-catalog.ts';
 process.env.EVIDENCE_FILE=new URL('../examples/demo-evidence.json',import.meta.url).pathname;
 delete process.env.MCP_SERVER_URL;
-function setup(t:test.TestContext,real=false,modelCatalog?:(provider:CatalogProvider)=>Promise<ModelCatalog>) {
+function setup(t:test.TestContext,real=false,modelCatalog?:(provider:CatalogProvider)=>Promise<ModelCatalog>,ollamaFetch?:typeof fetch) {
  const outputDir=mkdtempSync(join(tmpdir(),'koinous-api-'));t.after(()=>rmSync(outputDir,{recursive:true,force:true}));
  const invocations:Array<{id:ParticipantId;model:string|undefined;prompt:string;round:number}>=[];
- const app=createApplication({mode:real?'real':'mock',outputDir,modelCatalog,defaults:{providers:['codex','claude'],models:{codex:'default-codex',claude:'',grok:'grok-4.7'}},...(real?{}:{adapterFactory:(_mode:string,ids:readonly ParticipantId[]=[],models:Partial<Record<ParticipantId,string>>={})=>ids.map(id=>({id,async run(prompt:string,round:1|2|3){invocations.push({id,model:models[id],prompt,round});await Promise.resolve();return {text:`${id} ${models[id]} round ${round}`,requestedModel:models[id]||undefined,usage:{usd:id==='codex'?null:0.01}};}}))})});
+ const app=createApplication({mode:real?'real':'mock',outputDir,modelCatalog,ollamaFetch,defaults:{providers:['codex','claude'],models:{codex:'default-codex',claude:'',grok:'grok-4.7'}},...(real?{}:{adapterFactory:(_mode:string,ids:readonly ParticipantId[]=[],models:Partial<Record<ParticipantId,string>>={})=>ids.map(id=>({id,async run(prompt:string,round:1|2|3){invocations.push({id,model:models[id],prompt,round});await Promise.resolve();return {text:`${id} ${models[id]} round ${round}`,requestedModel:models[id]||undefined,usage:{usd:id==='codex'?null:0.01}};}}))})});
  async function request(path:string,method='GET',body?:unknown,origin?:string) {
   const req=Object.assign(Readable.from(body===undefined?[]:[JSON.stringify(body)]),{url:path,method,headers:origin?{origin}:{}});
   let status=0,text='';let headers:Record<string,string>={};
@@ -207,4 +207,11 @@ test('API accepts two OpenAI model slots and applies provider disabling to alias
  process.env.KOINOUS_DISABLED_PROVIDERS='claude,grok,ollama-local,ollama-cloud';
  const onlyOpenAI=(await request('/api/health')).json();assert.deepEqual(onlyOpenAI.availableProviders.map((p:{id:string})=>p.id),['codex']);assert.deepEqual(onlyOpenAI.availableParticipants.map((p:{id:string})=>p.id),['codex','codex-2']);
  const rejected=await request('/api/sessions','POST',{prompt:'Synthetic',selection:{providers:['codex','claude-2'],models:{}}});assert.equal(rejected.status,400);assert.match(rejected.text,/disabled/);
+});
+
+
+test('reasoning metadata route uses only injected Ollama show, preserves exact values and rejects invalid names before I/O',async t=>{
+ const paths:string[]=[];const {request,app}=setup(t,true,undefined,async(url,options)=>{paths.push(String(url));assert.deepEqual(JSON.parse(String(options?.body)),{model:'local:a'});return new Response(JSON.stringify({capabilities:['completion'],thinking:{values:['low','medium','high',false,true]}}));});
+ const found=await request('/api/models?provider=ollama-local&model=local:a');assert.equal(found.status,200);assert.deepEqual(found.json().values,['low','medium','high',false,true]);assert.equal(found.json().inferencePerformed,false);assert.equal(app.engine.sessions.size,0);assert.ok(paths.every(path=>path.endsWith('/api/show')));const before=paths.length;
+ assert.equal((await request('/api/models?provider=ollama-local&model=bad%20model')).status,400);assert.equal(paths.length,before);assert.equal(app.engine.sessions.size,0);await app.shutdown();
 });

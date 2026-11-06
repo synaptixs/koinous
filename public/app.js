@@ -47,6 +47,8 @@ let sessionId = null, events = null, ready = false, busy = false, inferenceEnabl
 const rows = [];
 let participantOptions = [], providerOptions = [], nextRow = 0;
 let cloudSetup = null;
+let reasoningLevels={};
+const reasoningLists=new Map(),reasoningQueries=new Map();
 const modelLists = new Map(), modelQueries = new Map();
 let workflowProgress = null;
 let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious = false, historyNext = false;
@@ -55,6 +57,35 @@ let pendingSavedSession = null;
 let workspaceView='new',reviewingSaved=false,draftConfiguration=null,sessionAttempted=false;
 let discussionState=null,feedbackPending=false,feedbackNotice='';
 const configurationFields=['question','context','rounds','workflowMode','author','acceptanceChecks','researchMode','researchQuery'];
+const effortKey=value=>value===undefined?'@legacy':value===null?'@default':value===true?'@true':value===false?'@false':value;
+const effortValue=value=>value==='@legacy'?undefined:value==='@default'?null:value==='@true'?true:value==='@false'?false:value;
+function rowEffortLabel(row,index){
+  const value=row?.effortValue;
+  if(value===undefined)return row?.provider==='codex'||row?.provider==='claude'?(index===undefined?'legacy provider default':index===1?'medium effort (legacy)':'low effort (legacy)'):'model default effort';
+  return value===null?'model default effort':value===true?'thinking on':value===false?'thinking off':value+' effort';
+}
+function renderReasoning(row){
+  const model=row.model.value.trim(),ollama=row.provider.startsWith('ollama-'),key=row.provider+'\n'+model;
+  const catalog=modelLists.get(row.provider),reported=Array.isArray(catalog?.efforts?.[model]),metadata=reasoningLists.get(key);
+  const values=ollama?(metadata?.values||[]):reported?catalog.efforts[model]:reasoningLevels[row.provider]||[];
+  if(!row.effortTouched&&row.effortValue!==undefined){
+    if(ollama&&metadata&&!metadata.error&&row.effortValue===null&&values.includes('medium'))row.effortValue='medium';
+    else if(reported&&!values.length)row.effortValue=null;
+  }
+  const invalid=row.effortValue!==undefined&&row.effortValue!==null&&!values.includes(row.effortValue);
+  row.effortSelect.replaceChildren();
+  const add=(value,label,disabled=false)=>{const option=viewNode('option',label);option.value=effortKey(value);option.disabled=disabled;row.effortSelect.append(option);};
+  if(row.effortValue===undefined)add(undefined,'Legacy workflow settings');
+  add(null,'Model default');
+  for(const value of values)add(value,value===true?'Thinking on':value===false?'Thinking off':value[0].toUpperCase()+value.slice(1)+(value==='medium'?' · default':''));
+  if(invalid)add(row.effortValue,String(row.effortValue)+' · unavailable; choose another level',true);
+  row.effortSelect.value=effortKey(row.effortValue);
+  row.effortSelect.disabled=busy||!row.id||(!values.length&&!invalid&&row.effortValue!==undefined);
+  row.loadReasoning.hidden=!ollama;row.loadReasoning.disabled=busy||!row.id||!model||reasoningQueries.has(key);
+  row.effortStatus.textContent=!row.id?'Choose a provider.':ollama?metadata?.error||(!metadata?'Load this model’s reasoning choices; currently using model default. No inference is requested.':values.length?'Model-reported reasoning controls. Medium is the starting choice when supported.':'No named reasoning controls reported; using model default.'):reported?(values.length?'Model-reported levels supported by this SDK.':'This model reports no effort control.'):(row.provider==='grok'?'This transport does not expose reasoning levels.':'Pinned SDK levels; this model’s support is unverified until its catalog reports it.');
+  row.effortError.textContent=invalid?'This reasoning level is not available in the loaded choices. Choose another or Model default.':'';
+  row.effortSelect.setAttribute('aria-invalid',String(invalid));return invalid;
+}
 function canQueueFeedback(){
   return !!sessionId&&busy&&!discussionState?.terminal&&discussionState?.mode==='discussion'&&!discussionState.stopping&&discussionState.status!=='Connection lost'&&Math.max(2,discussionState.lastStarted+1)<=discussionState.maxRounds;
 }
@@ -100,11 +131,11 @@ async function prepareFollowup(){
   }catch(error){feedbackNotice='Follow-up not prepared: '+error.message+' Your feedback and the original discussion are unchanged.';}
   finally{feedbackPending=false;refresh();}
 }
-function captureConfiguration(){return {fields:Object.fromEntries(configurationFields.map(id=>[id,$(id).value])),rows:rows.map(row=>({id:row.id,model:row.model.value,customMode:row.customMode})),contextOpen:$('contextDetails').open,advancedOpen:$('advancedSettings').open};}
+function captureConfiguration(){return {fields:Object.fromEntries(configurationFields.map(id=>[id,$(id).value])),rows:rows.map(row=>({id:row.id,model:row.model.value,customMode:row.customMode,effort:row.effortValue,effortTouched:row.effortTouched})),contextOpen:$('contextDetails').open,advancedOpen:$('advancedSettings').open};}
 function restoreConfiguration(snapshot){
   for(const [id,value] of Object.entries(snapshot.fields))$(id).value=value;
   rows.splice(0);$('participantChoices').replaceChildren();
-  for(const saved of snapshot.rows){const row=addParticipant(participantOptions.find(option=>option.id===saved.id),saved.model);row.customMode=saved.customMode;}
+  for(const saved of snapshot.rows){const row=addParticipant(participantOptions.find(option=>option.id===saved.id),saved.model);row.customMode=saved.customMode;row.effortValue=saved.effort;row.effortTouched=saved.effortTouched;}
   $('contextDetails').open=snapshot.contextOpen;$('advancedSettings').open=snapshot.advancedOpen;refresh(snapshot.fields.author);
 }
 function resetSessionView(){
@@ -120,6 +151,7 @@ function showSavedConfiguration(saved){
   const root=$('savedConfiguration');root.replaceChildren(viewNode('h3','Recorded setup'),readableText(saved.prompt));
   root.append(viewNode('p',(saved.workflowMode==='targeted'?'Draft + targeted review':'Full discussion')+' · '+(saved.selection?rows.map(participantLabel).join(' + '):'Participants not recorded.')));
   if(saved.targetedConfig)root.append(viewNode('p','Draft author: '+saved.targetedConfig.author));
+  if(saved.selection)root.append(viewNode('p','Requested reasoning: '+saved.selection.providers.map(id=>id+' · '+(Object.hasOwn(saved.selection.efforts||{},id)?rowEffortLabel(rows.find(row=>row.id===id)):'not recorded (legacy workflow settings)')).join(' + ')));
   const details=viewDetails('Context, criteria and research');
   details.append(viewNode('h4','Supplied context'),readableText(saved.context||'No additional context recorded.'),viewNode('h4','Review criteria'));
   details.append(saved.targetedConfig?.checks?.length?viewList(saved.targetedConfig.checks):viewNode('p','No explicit review criteria recorded.'));
@@ -143,12 +175,15 @@ function navigateWorkspace(view){
 function selectedHistoryFilters() { return {provider:$('savedProvider').value, model:$('savedModel').value.trim(), from:$('savedFrom').value, to:$('savedTo').value}; }
 function selection() {
   const selected = rows.filter(row => row.id);
-  return {providers: selected.map(row => row.id), models: Object.fromEntries(selected.map(row => [row.id, row.model.value.trim()]))};
+  const efforts=Object.fromEntries(selected.filter(row=>row.effortValue!==undefined&&(['codex','claude'].includes(row.provider)||row.effortValue!==null)).map(row=>[row.id,row.effortValue]));
+  return {providers: selected.map(row => row.id), models: Object.fromEntries(selected.map(row => [row.id, row.model.value.trim()])),...(Object.keys(efforts).length?{efforts}:{})};
 }
 function refresh(preferredAuthor) {
+  const invalidEffort=rows.map(renderReasoning).some(Boolean);
   const chosen = selection();
   const invalidModel = Object.values(chosen.models).some(value => value.length > 128 || (value && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value)));
   const selected=rows.filter(row=>row.id);
+  const pendingEffort=selected.some(row=>modelQueries.has(row.provider)||reasoningQueries.has(row.provider+'\n'+row.model.value.trim()));
   const duplicateModel=selected.some(row=>selected.some(other=>other!==row&&other.provider===row.provider&&(!(row.model.value.trim())||!(other.model.value.trim())||(row.model.value.trim())===(other.model.value.trim()))));
   const targeted=$('workflowMode').value==='targeted';
   const previousAuthor=typeof preferredAuthor==='string'?preferredAuthor:$('author').value;
@@ -164,14 +199,16 @@ function refresh(preferredAuthor) {
   const researchEnabled=['wikipedia','web','both'].includes($('researchMode').value),badQuery=researchEnabled&&(!$('researchQuery').value.trim()||$('researchQuery').value.length>300),missingIdea=!$('question').value.trim(),longContext=$('context').value.length>6000;
   const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : pendingCloudSetup ? 'Register the selected cloud setup example in Ollama, then Refresh models to confirm it.' : missingModel ? 'Choose a model for every participant.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : badQuery?'Enter public search keywords (1–300 characters).':missingIdea?'Describe your idea before starting.':'';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
-  $('run').disabled = busy || historyLoading || feedbackPending || reviewingSaved || workspaceView!=='new' || !!error || longContext || !inferenceEnabled;
+  $('run').disabled = busy || historyLoading || feedbackPending || pendingEffort || reviewingSaved || workspaceView!=='new' || !!error || longContext || invalidEffort || !inferenceEnabled;
+  if(pendingEffort)$('selectionError').textContent='Loading model or reasoning choices. Wait before starting.';
+  if(invalidEffort)$('selectionError').textContent='Choose supported reasoning levels for the selected models.';
   if(longContext)$('selectionError').textContent='Context exceeds 6000 characters. Shorten it before starting; no text was omitted.';
   $('contextError').textContent=longContext?'Context: '+$('context').value.length+' / 6000 characters. Shorten before starting. No text was omitted.':'';$('context').setAttribute('aria-invalid',String(longContext));
   $('researchQueryField').hidden=!researchEnabled;$('researchError').textContent=badQuery?'Enter a public query of 1–300 characters.':'';$('researchQuery').setAttribute('aria-invalid',String(badQuery));
   $('ideaError').textContent=missingIdea?'An idea is required to start.':'';$('question').setAttribute('aria-invalid',String(missingIdea));
-  $('setupState').textContent=workspaceView==='saved'?(reviewingSaved?'Read-only review':'Saved history'):busy?'Discussion running':error||longContext?'Setup needed':!inferenceEnabled?'Inference disabled':'Ready to start';$('setupState').className='setup-state'+(!error&&!longContext&&!busy&&inferenceEnabled&&workspaceView==='new'?' is-ready':'');
+  $('setupState').textContent=workspaceView==='saved'?(reviewingSaved?'Read-only review':'Saved history'):busy?'Discussion running':pendingEffort?'Loading model choices':error||longContext||invalidEffort?'Setup needed':!inferenceEnabled?'Inference disabled':'Ready to start';$('setupState').className='setup-state'+(!error&&!longContext&&!invalidEffort&&!pendingEffort&&!busy&&inferenceEnabled&&workspaceView==='new'?' is-ready':'');
   const researchLabel={none:'research off',wikipedia:'Wikipedia',web:'Brave web search',both:'Wikipedia + Brave'}[$('researchMode').value]||'research off';
-  $('runConfigurationSummary').textContent=rows.length+' participants · '+rows.map(row=>(providerOptions.find(option=>option.id===row.provider)?.label||'provider not chosen')+' / '+(row.model.value.trim()||'model not chosen')).join(' + ')+' · '+(targeted?'Draft + review':'Full discussion')+' · '+researchLabel;
+  $('runConfigurationSummary').textContent=rows.length+' participants · '+rows.map(row=>(providerOptions.find(option=>option.id===row.provider)?.label||'provider not chosen')+' / '+(row.model.value.trim()||'model not chosen')+' · '+rowEffortLabel(row)).join(' + ')+' · '+(targeted?'Draft + review':'Full discussion')+' · '+researchLabel;
   $('openSaved').disabled = busy || historyLoading || feedbackPending || !$('savedSessions').value;
   for (const id of ['savedProvider','savedModel','savedFrom','savedTo','savedSessions','refreshSaved','savedSearch','searchSaved','clearSaved']) $(id).disabled = busy || historyLoading || feedbackPending;
   $('previousSaved').disabled = busy || historyLoading || !historyPrevious;
@@ -189,6 +226,7 @@ function refresh(preferredAuthor) {
     const number=rows.indexOf(row)+1;
     row.title.textContent='Participant '+number;
     row.providerSelect.setAttribute('aria-label','Participant '+number+' provider');
+    row.loadReasoning.setAttribute('aria-label','Load reasoning choices for participant '+number);
     row.model.setAttribute('aria-label','Participant '+number+' model ID');
     row.modelPicker.setAttribute('aria-label','Participant '+number+(row.provider==='ollama-cloud'?' cloud models':row.provider==='ollama-local'?' registered models':' model'));
     row.role.textContent=targeted?(row.id===$('author').value?'Draft author':'Reviewer'):'Full discussion';
@@ -207,7 +245,7 @@ function refresh(preferredAuthor) {
   $('plannedCalls').textContent = targeted?3:rows.length * Number($('rounds').value);
   if (!sessionId) $('maxCalls').textContent = $('plannedCalls').textContent;
   renderWorkspace();renderFeedback();
-  return !error&&!longContext;
+  return !error&&!longContext&&!invalidEffort&&!pendingEffort;
 }
 function append(title, body, who = '') {
   const d = document.createElement('div'); d.className = 'message ' + who;
@@ -351,8 +389,8 @@ function renderWorkflowFlow() {
     if(targeted){
       step.append(viewNode('p',owner?providerOptions.find(option=>option.id===owner.provider)?.label||owner.id:'Choose a participant','workflow-step-provider'));
       step.append(viewNode('p',owner?(owner.model.value.trim()||'Choose a model'):'Model not selected','workflow-step-model'));
-      step.append(viewNode('small',(owner?'Participant '+(rows.indexOf(owner)+1)+' · ':'')+(owner?.effortMode==='model-default'?'model default effort':index===1?'medium effort':'low effort')));
-    }else step.append(viewNode('p','All selected participants','workflow-step-provider'));
+      step.append(viewNode('small',(owner?'Participant '+(rows.indexOf(owner)+1)+' · ':'')+rowEffortLabel(owner,index)));
+    }else {step.append(viewNode('p','All selected participants','workflow-step-provider'));for(const row of rows)step.append(viewNode('small',participantLabel(row)+' · '+rowEffortLabel(row)));}
     $('workflowSteps').append(step);$('stageTags').append(viewNode('span',round+' · '+titles[index]+' · '+label,'tag'));
   }
   const notice=progress?(progress.status==='Connection lost'?'Connection lost. Progress is unknown; the discussion may still be running.':(progress.saved?'Saved run · ':'')+progress.status+'. Step status describes execution, not recommendation quality.'):'Planned flow · starting a discussion uses model resources.';
@@ -423,6 +461,7 @@ function showModelChoices(provider,data) {
 function configureParticipant(row,capability,modelValue) {
   Object.assign(row,{id:capability?.id||'',provider:capability?.provider||'',defaultModel:capability?.defaultModel||'',modelLabels:{},modelDiscovery:!!capability?.modelDiscovery||['codex','claude','grok'].includes(capability?.provider),requiresInstalledModel:!!capability?.requiresInstalledModel,effortMode:capability?.effortMode,availableModels:[]});
   row.providerSelect.value=row.provider;
+  row.effortValue=['codex','claude'].includes(row.provider)?'medium':null;row.effortTouched=false;
   row.model.value=modelValue??'';row.customMode=false;
   row.model.placeholder='Enter an explicit model ID';
   row.note.textContent=!row.id?'Choose a provider to view its model catalog.':row.provider==='ollama-local'?'Runs on this device. An installed model is required.':row.provider==='ollama-cloud'?'Runs in Ollama Cloud through your local daemon.':'Runs in the provider cloud using your account login.';
@@ -451,9 +490,20 @@ function addParticipant(capability,modelValue) {
   const links=viewNode('div',undefined,'ollama-setup-links');links.append(catalogLink,modelPageLink,docsLink);
   cloudHelp.append(helpTitle,cloudHint,commands,viewNode('small','Keep Ollama running. Commands target the same daemon as synqo. Cloud models run remotely; registration does not start a conversation.'),links);discovery.append(cloudHelp);
   const customButton=viewNode('button','Enter a custom model ID','secondary');customButton.type='button';
-  const row={card,title,role,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,modelError,cloudHelp,commands,cloudHint,modelPageLink,pickerLabel,customButton,modelLabel};rows.push(row);
+  const reasoning=viewNode('div',undefined,'reasoning-control'),effortLabel=viewNode('label','Reasoning effort'),effortSelect=viewNode('select'),loadReasoning=viewNode('button','Load reasoning choices','secondary'),effortStatus=viewNode('small'),effortError=viewNode('small','','model-error');
+  effortSelect.id='participant-effort-'+key;effortLabel.htmlFor=effortSelect.id;effortSelect.setAttribute('aria-label','Participant '+(rows.length+1)+' reasoning effort');effortStatus.id='participant-effort-status-'+key;effortError.id='participant-effort-error-'+key;effortSelect.setAttribute('aria-describedby',effortStatus.id+' '+effortError.id);effortStatus.setAttribute('role','status');loadReasoning.type='button';reasoning.append(effortLabel,effortSelect,loadReasoning,effortStatus,effortError);
+  const row={card,title,role,providerSelect,model,note,discovery,modelPicker,refreshModels,modelStatus,modelError,cloudHelp,commands,cloudHint,modelPageLink,pickerLabel,customButton,modelLabel,reasoning,effortSelect,loadReasoning,effortStatus,effortError};rows.push(row);
+  effortSelect.onchange=()=>{if(!busy){row.effortValue=effortValue(effortSelect.value);row.effortTouched=true;refresh();}};
+  loadReasoning.onclick=async()=>{
+    const provider=row.provider,model=row.model.value.trim(),key=provider+'\n'+model;
+    if(busy||!provider.startsWith('ollama-')||!model||reasoningQueries.has(key))return;
+    const query={};reasoningQueries.set(key,query);refresh();row.effortStatus.textContent='Reading model reasoning metadata…';
+    try{const response=await fetch('/api/models?provider='+encodeURIComponent(provider)+'&model='+encodeURIComponent(model)),data=await response.json();if(!response.ok)throw Error(data.error||'Reasoning metadata unavailable.');if(!Array.isArray(data.values)||data.values.length>32)throw Error('Invalid reasoning metadata.');reasoningLists.set(key,{values:data.values.filter(value=>typeof value==='boolean'||typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value))});}
+    catch(error){reasoningLists.set(key,{values:[],error:error.message});}
+    finally{if(reasoningQueries.get(key)===query)reasoningQueries.delete(key);refresh();}
+  };
   customButton.onclick=()=>{if(!busy&&row.id){row.customMode=!row.customMode;refresh();}};
-  configureParticipant(row,capability,modelValue);card.append(title,role,providerLabel,providerSelect,modelLabel,model,note,discovery,modelError,customButton);$('participantChoices').append(card);
+  configureParticipant(row,capability,modelValue);card.append(title,role,providerLabel,providerSelect,modelLabel,model,note,discovery,modelError,customButton,reasoning);$('participantChoices').append(card);
   providerSelect.onchange=()=>{
     if(busy)return;
     const wasAuthor=$('author').value===row.id;
@@ -478,11 +528,13 @@ function addParticipant(capability,modelValue) {
   };
   return row;
 }
-function setParticipants(chosen) {
+function setParticipants(chosen,historical=false) {
   rows.splice(0);$('participantChoices').replaceChildren();
   for(const id of chosen.providers){
     const capability=participantOptions.find(option=>option.id===id);
     const row=addParticipant(capability,chosen.models[id]||'');
+    if(Object.hasOwn(chosen.efforts||{},id)){row.effortValue=chosen.efforts[id];row.effortTouched=true;}
+    else if(historical)row.effortValue=undefined;
     if(!capability&&row){row.id=id;const unavailable=viewNode('option','Unavailable on this server: '+id);unavailable.value='';row.providerSelect.replaceChildren(unavailable);row.note.textContent='Saved participant is unavailable on this server. Choose an enabled provider to start a new discussion.';
       for(const provider of providerOptions){const option=viewNode('option',provider.label);option.value=provider.id;row.providerSelect.append(option);}
     }
@@ -492,6 +544,7 @@ function setParticipants(chosen) {
 const configurationReady = fetch('/api/health').then(async response => {
   if (!response.ok) throw Error('Configuration unavailable');
   const health = await response.json();
+  reasoningLevels=health.reasoningLevels||{};
   cloudSetup=health.ollamaCloudSetup||null;
   inferenceEnabled = health.mode === 'mock' || health.inferenceEnabled === true;
   webSearchAvailable=health.research?.web===true;
@@ -717,7 +770,7 @@ async function openSaved(id) {
     $('rounds').value = String(s.maxRounds);$('workflowMode').value=s.workflowMode||'discussion';$('author').value=s.targetedConfig?.author||'';$('acceptanceChecks').value=(s.targetedConfig?.checks||[]).join('\n');
     $('researchMode').value=s.research?.mode||(s.workflow?.research.status==='completed'?'wikipedia':'none');
     $('researchQuery').value=s.research?.query||s.workflow?.research.query||'';
-    if (s.selection) setParticipants(s.selection);
+    if (s.selection) setParticipants(s.selection,true);
     refresh(s.targetedConfig?.author);showSavedConfiguration(s);beginWorkflowProgress(s);renderWorkflowFlow();
     $('calls').textContent = s.calls; $('maxCalls').textContent = s.maxCalls ?? 'Unknown';
     $('cost').textContent = '$' + Number(s.spendKnownUSD).toFixed(4) + (s.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)');

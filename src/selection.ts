@@ -2,10 +2,12 @@ import {PARTICIPANTS,providerFor,validateParticipants} from './participants.ts';
 import type {ParticipantId} from './participants.ts';
 import type {AgentId} from './core.ts';
 import {configuredProviders} from './provider-config.ts';
+import {validateEffort} from './reasoning.ts';
+import type {Efforts,ReasoningEffort} from './reasoning.ts';
 
 // Legacy wire names are retained: providers contains participant IDs, and models
 // is keyed by those IDs. Provider ownership is defined in participants.ts.
-export type Selection = Readonly<{providers: readonly ParticipantId[]; models: Readonly<Partial<Record<ParticipantId, string>>>}>;
+export type Selection = Readonly<{providers: readonly ParticipantId[]; models: Readonly<Partial<Record<ParticipantId, string>>>;efforts?:Efforts}>;
 
 function modelId(value: unknown): string {
   if (typeof value !== 'string' || value.length > 128 || (value !== '' && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/.test(value))) {
@@ -29,7 +31,7 @@ export function resolveSelection(input: unknown, defaults: Selection = {provider
   if (input === undefined) input = {providers: defaults.providers};
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Selection must contain providers and optional models');
   const obj = input as Record<string, unknown>;
-  if (Object.keys(obj).some(key => !['providers', 'models'].includes(key))) throw new Error('Selection accepts only providers and models; authentication uses provider account login (personal or enterprise)');
+  if (Object.keys(obj).some(key => !['providers', 'models','efforts'].includes(key))) throw new Error('Selection accepts only providers, models and efforts; authentication uses provider account login (personal or enterprise)');
   if (!Array.isArray(obj.providers) || obj.providers.some(id => typeof id !== 'string')) throw new Error('Select at least two distinct participants');
   const providers = validateParticipants(obj.providers);
   const requested = obj.models === undefined ? {} : obj.models;
@@ -48,5 +50,14 @@ export function resolveSelection(input: unknown, defaults: Selection = {provider
     const peers=providers.filter(other=>other!==id&&providerFor(other)===providerFor(id));
     if(peers.length&&((!allowUnspecifiedModels&&(!models[id]||peers.some(other=>!models[other])))||peers.some(other=>models[id]&&models[other]===models[id])))throw Error('Participants using the same provider require two explicit, different model IDs');
   }
-  return Object.freeze({providers: Object.freeze(providers), models: Object.freeze(models)});
+  const requestedEfforts=obj.efforts===undefined?defaults.efforts:obj.efforts;
+  const efforts:Partial<Record<ParticipantId,ReasoningEffort>>={};
+  if(requestedEfforts!==undefined){
+    if(!requestedEfforts||typeof requestedEfforts!=='object'||Array.isArray(requestedEfforts))throw Error('Efforts must be keyed by selected participant');
+    for(const [id,value] of Object.entries(requestedEfforts)){
+      if(!providers.includes(id as ParticipantId)){if(obj.efforts===undefined)continue;throw Error('Effort overrides must belong to selected participants');}
+      efforts[id as ParticipantId]=validateEffort(id as ParticipantId,value);
+    }
+  }
+  return Object.freeze({providers: Object.freeze(providers), models: Object.freeze(models),...(requestedEfforts===undefined?{}:{efforts:Object.freeze(efforts)})});
 }

@@ -16,9 +16,9 @@ account before starting. synqo does not select an enterprise workspace for you.
 
 In the UI, click **Load models**, then choose **two different model IDs** from the
 dropdowns, one for each OpenAI participant. Both model fields begin empty. The
-default targeted workflow uses a low-effort
-author, a medium-effort reviewer and a conditional low-effort revision (two or three
-calls). Choose the author in the UI. Full discussion remains available for the
+default targeted workflow starts both participants at **Medium** reasoning. Change
+each card’s **Reasoning effort** independently; revision reuses the author’s choice
+(two or three calls). Choose the author in the UI. Full discussion remains available for the
 earlier three-round, six-response exchange. Each participant retains its selected
 model and accounting. Both use the same
 local subscription login. Start discussion sends prompts; setup sends none.
@@ -150,7 +150,11 @@ the general `npm start` entry point; all selections remain editable in the UI.
 deadline (`MODEL_TIMEOUT_MS`, normally 120 seconds). Local loading can consume
 much of that deadline. An abort stops waiting; it cannot guarantee remote work stopped.
 
-The application uses model default effort for Ollama and sends no tools. Token
+The application sends no tools. Choose a model, then **Load reasoning choices** to
+read its thinking metadata without inference. Medium is selected when supported;
+otherwise Model default remains. You can select reported named levels or on/off
+controls. Selected controls are revalidated before chat; unsupported levels stop
+before inference rather than silently using a default. Token
 usage is reported input + output; cached prompt tokens are a subset. Unreported
 helper usage and cost remain unknown. Saved selections, token accounting and
 Markdown/JSON downloads use the same workflow as other providers. Protected

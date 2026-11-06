@@ -29,6 +29,77 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Per-participant reasoning selection — 2026-11-06 UTC (offline)
+
+Participant cards now expose Reasoning effort. Fresh OpenAI/Claude selections default
+to medium; low/high and other pinned SDK levels are independently selectable. The
+same selected author level reaches draft and conditional revision; reviewer effort
+is independent. Both full discussion and targeted review use the actual selection,
+not hard-coded UI labels. The existing pair preset now starts both at medium.
+
+The owning selection contract adds optional immutable efforts keyed by participant.
+Native values are validated against a shared reasoning module; null explicitly
+requests provider/model default. Omitted keys preserve legacy API behavior, so
+historical runs and existing benchmark/API inputs are not silently relabeled or
+retuned. Saved setup shows absent effort as unrecorded/legacy; explicit choices
+survive setup snapshots, reopening and follow-up. Model choices remain empty until
+selected. Requested effort is recorded in new entries/events and Markdown/JSON;
+this is not a claim about a provider-effective setting or entitlement.
+
+Pinned SDK-supported levels come from the owning reasoning module through health.
+Codex and Claude catalog normalization retains compatible model-specific levels
+(including explicit no-effort support) from metadata. Unsupported selected values
+stay visible and block Start instead of falling back. Custom IDs are marked model
+support unverified. Ollama Load reasoning choices explicitly reads the selected
+model’s /api/show through the existing /api/models path and loopback transport.
+It offers reported named/boolean controls and selects medium only when reported;
+otherwise Model default remains. Exact selected think values, including false,
+are checked again against metadata before each chat, so changed/unsupported levels
+stop before inference. No new credential, model probe, API-key fallback, pull or
+login flow. Tenant model routes stay denied. Metadata loading blocks Start and late
+results cannot overwrite a switched provider’s selection. Controls lock during runs.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | SDK/catalog/selection contracts, compatibility and measured PKG impact | Passed |
+| Implement | 25% | UI, validated dispatch, metadata controls, saved data and exports | Passed |
+| Verify | 25% | TypeScript, 699 Node + 33 Python tests; desktop/mobile mock checks | Passed |
+| Document | 25% | Guides, contract, design rationale and validation recorded | Passed |
+
+PKG measured before edits on clean a2994d8 (callers/docs): resolveSelection20/0,
+codexReasoningEffort5/2, claudeReasoningEffort2/0, createAdapters16/0,
+normalizeCatalog5/0, createApplication19/2, createProtectedApplication6/1,
+runTargeted1/0, makeReport23/2, targetedMarkdown2/0, OllamaAdapter9/0
+(prepare1/0, run9/0), Engine.run36/2. UI capture/restore1/1 each, selection3/1,
+refresh28/1, workflowKey2/1, renderWorkflowFlow4/1, configureParticipant2/1,
+addParticipant4/1, showModelChoices2/1, setParticipants4/1, prepareFollowup0/1,
+showSavedConfiguration1/1, openSaved2/1 and module0/1. No blast truncation;
+JS/TS untraced calls are not tracked, so counts are floors. Method-specific gap
+queries for Engine.run and Ollama methods did not resolve; class/caller coverage
+and engine/adapter tests provide the fallback. Other gap calls resolve without
+truncation. Uncovered reach includes UI configure/navigation/restore/flow/finish/
+history/module callbacks, server/secure-server and demo/start-real/evaluate callbacks.
+VM UI tests are not graph-linked. Full measured caller/doc/gap evidence is in the
+external review artifact; no generated knowledge files enter this checkout.
+
+Twenty-five new cases cover immutable maps and invalid inputs, real factory-created
+adapters with SDK I/O replaced (selected xhigh/max and explicit provider defaults),
+model metadata, exact Ollama named/boolean dispatch and strict pre-chat rejection,
+API metadata without sessions/inference, requested effort persistence/exports,
+targeted author-reviewer-revision dispatch, medium UI defaults, model narrowing,
+legacy labeling, draft/follow-up compatibility, explicit Ollama loading and late
+metadata. Full offline gate passes. Browser checks cover blank models/medium defaults,
+independent high/low, a two-call mock session, read-only reopening with retained
+settings, unchanged legacy labels, explicit Ollama reasoning loading and 390px
+without page overflow. No real model, provider metadata, authentication or research
+call ran. User server untouched; owned mock preview/storage isolated.
+
+Official contracts consulted: [OpenAI model catalog](https://learn.chatgpt.com/docs/app-server),
+[Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort),
+[Ollama thinking](https://docs.ollama.com/capabilities/thinking). No dependency upgrade.
+Overall48.33% and P6 80% unchanged; empirical E5 and other deferred/unestimated work
+remain open. Selecting effort does not authorize a new live benchmark.
+
 ### Workflow colors and optional human feedback — 2026-11-06 UTC (offline)
 
 Running cards now have a pale blue fill; received-response cards and the completed
