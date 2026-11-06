@@ -184,6 +184,32 @@ appears in the browser or model SDK environment. It authenticates the separate
 search service, not a model provider; its usage/charges are separate from the
 model token accounting. See [research setup](DEMO.md#optional-research).
 
+### Human feedback during or after a discussion
+
+Human input is **optional**; models continue without waiting for it. Add a correction,
+missing constraint or evidence in the feedback panel below the collaboration flow.
+Running steps are pale blue; steps with received responses are very light green.
+These colors describe execution, not whether a recommendation is correct.
+
+- **Full discussion:** **Send to next round** queues feedback for the next unfrozen
+  round. The confirmation names its earliest applicable round. Calls already in
+  progress are unchanged; cancellation or failure may prevent the later round.
+  The final round and one-round discussions cannot accept new input for that run.
+- **Targeted review:** inputs stay fixed. You can compose feedback while it runs,
+  then use it in a follow-up after completion.
+- **Finished or saved discussion:** enter feedback and choose **Prepare follow-up**.
+  This replaces the unfinished setup with an editable copy of the recorded idea,
+  context, participants/models, checks and selected decision/review/unresolved fields,
+  plus your feedback. The original stays saved. Review the setup, then explicitly
+  press **Start discussion** to obtain a new recommendation using model resources.
+
+Preparation only reads the saved record; it does not start models, load catalogs or
+search. Research starts off. The full transcript, duplicate original draft, coverage
+and evidence snapshot are not copied; inspect those in the original record. Prior
+model output and human claims remain unverified input. Context is never silently
+clipped: if the combined text exceeds 6000 characters, shorten it before Start.
+Unsent feedback and prepared setup drafts remain only in the open page.
+
 ## How it works
 
 **Draft + targeted review is the UI default.** Select exactly two OpenAI, Claude or

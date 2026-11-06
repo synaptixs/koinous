@@ -65,8 +65,11 @@ export class Engine extends EventEmitter {
   intervene(s:Session,message:string){
     if(s.workflowMode==='targeted')throw Error('Targeted review uses fixed inputs; start a new session to change them');
     if(!['created','running'].includes(s.status))throw new Error('Session is not active');
+    const lastStarted=s.events.reduce((round,event)=>event.type==='round.started'&&typeof event.round==='number'?Math.max(round,event.round):round,0);
+    const appliesFromRound=Math.max(2,lastStarted+1);
+    if(appliesFromRound>s.maxRounds||s.cancel.signal.aborted||s.events.some(event=>['discussion.stopped','session.error','budget.denied'].includes(event.type)))throw Error('No future round can use this feedback; prepare a follow-up after the discussion finishes');
     if(!message.trim()||message.length>1000) throw new Error('Intervention must contain 1–1000 characters');
-    s.interventions.push(message.trim());this.emitEvent(s,'human.intervention',{message:message.trim(),note:'Included at next discussion round boundary, if any'});
+    s.interventions.push(message.trim());this.emitEvent(s,'human.intervention',{message:message.trim(),appliesFromRound,note:'Queued for prompts from round '+appliesFromRound+'; not applied to calls already in progress'});
   }
   cancel(s:Session){if(s.status==='running'||s.status==='created'){s.cancel.abort();this.emitEvent(s,'cancel.requested');}}
   async run(s:Session){
