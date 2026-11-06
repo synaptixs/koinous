@@ -8,9 +8,10 @@ If your team uses only corporate ChatGPT/Codex access, run:
 npm run demo:live -- --openai-only
 ```
 
-This installs pinned dependencies and reuses your local ChatGPT login or opens
-Codex's browser login flow when needed. Sign in with your approved corporate
-account. It checks only Codex; Claude and Grok are disabled, with no API-key
+This installs pinned dependencies and checks your local ChatGPT login. If it is
+not confirmed, sign in explicitly with `npm run setup -- login codex`, using your
+approved corporate account, then rerun the launcher. It checks only Codex; Claude
+and Grok are disabled, with no API-key
 fallback. An existing login is reused, so confirm it is the intended corporate
 account before starting. synqo does not select an enterprise workspace for you.
 
@@ -51,22 +52,38 @@ npm run demo:live
 ```
 
 This command installs pinned dependencies using `npm ci` (internet required;
-replaces node_modules on each launch), reuses existing provider account logins, opens
-any missing personal/enterprise ChatGPT/Claude account login flow, and verifies the login method
-before starting the existing live UI. Complete the provider browser sign-ins yourself.
+replaces node_modules on each launch), then independently checks existing
+personal/enterprise ChatGPT/Claude account logins. Unavailable providers are printed
+as **skipped** and excluded from the server's provider choices. No browser login
+opens automatically. To enable a skipped account, run `npm run setup -- login codex`
+or `npm run setup -- login claude`, complete its sign-in, and restart synqo.
 No API-key fallback, credentials copied into the project, or model prompts during
 setup. Login status confirms the method, not quota or model access. Grok stays off.
+
+| Confirmed account providers | Startup behavior |
+|---|---|
+| OpenAI and Claude | Both available; choose each participant's provider/model |
+| OpenAI only or Claude only | Other account provider skipped; choose two different models from the confirmed provider |
+| Neither | Stop with explicit login instructions; alternatively use the Ollama-only command below or `npm run demo` for mock UI |
+
+Missing CLI, status timeout/error, signed-out account and API-key login are all
+unconfirmed. Optional Ollama still requires explicit model discovery; startup does
+not verify daemon availability or sign in to Ollama. The `--openai-only` restriction
+never checks or switches to Claude. Models are not selected automatically.
 
 Open the localhost URL printed in the terminal. Click **Load models** in each row
 and choose a model from its dropdown. No model is selected automatically. Enter an
 idea, keep Draft + targeted review, choose the author,
 and click Start discussion. Only
 that click sends model prompts and uses provider account quota. Stop with Ctrl+C to
-end the server's inference opt-in. Startup errors stop without automatic retries.
+end the server's inference opt-in. Install/server failures stop without automatic
+retries; a registry/DNS error in `npm ci` still needs correction. Once a discussion
+starts, provider failures remain explicit and stop the existing workflow; synqo
+does not silently remove selected participants or choose a replacement model.
 Existing manual setup commands below remain available for troubleshooting.
 `npm run demo:live -- --help` prints offline instructions without installation/login.
 
-The one-command setup is offline-tested with fake installation/authentication/server
+The one-command setup is offline-tested with fake installation/status/server
 steps; no new live login or model run was made while implementing it. The underlying
 Codex/Claude discussion path has passed a bounded live UI run with six responses,
 complete peer coverage, a nonblocking length warning and an attributed recommendation.

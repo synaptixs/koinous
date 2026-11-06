@@ -1,8 +1,7 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {resolve} from 'node:path';
-import {authCommand,subscriptionReady} from '../src/subscription-setup.ts';
-import type {AuthResult,LoginProvider} from '../src/subscription-setup.ts';
+import type {AuthResult} from '../src/subscription-setup.ts';
 import {subscriptionEnvironment} from '../src/provider-config.ts';
 
 export type DemoCommand={file:string;args:string[];capture:boolean;timeoutMs:number;purpose?:'server'};
@@ -32,7 +31,7 @@ export function runDemoCommand(command:DemoCommand,signal:AbortSignal):Promise<A
 }
 export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:AbortSignal;log?:(s:string)=>void;npmPath?:string;nodeVersion?:string}={}){
  const log=options.log??console.log,run=options.run??runDemoCommand,signal=options.signal??new AbortController().signal;
- if(args.length===1&&args[0]==='--help'){log('npm run demo:live — installs pinned dependencies, opens missing personal/enterprise provider login flows, then starts the live UI. No model calls until Start discussion. Ctrl+C stops. Use -- --openai-only for two OpenAI models with one corporate ChatGPT/Codex login (no Claude login). Requires Node 22.16+ and internet.');return;}
+ if(args.length===1&&args[0]==='--help'){log('npm run demo:live — installs pinned dependencies, checks personal/enterprise provider logins, skips unavailable providers, then starts the live UI. No automatic browser login or model calls until Start discussion. Sign in explicitly with npm run setup -- login codex or npm run setup -- login claude. Ctrl+C stops. Use -- --openai-only for two OpenAI models with one ChatGPT/Codex login (no Claude check). Requires Node 22.16+ and internet.');return;}
  const openaiOnly=args.length===1&&args[0]==='--openai-only';
  if(args.length&&!openaiOnly)throw Error('Use npm run demo:live, -- --openai-only, or -- --help.');
  const [major,minor]=(options.nodeVersion??process.versions.node).split('.').map(Number);
@@ -42,16 +41,8 @@ export async function demoLive(args:string[],options:{run?:DemoRunner;signal?:Ab
  const step=async(command:DemoCommand)=>{signal.throwIfAborted();const result=await run(command,signal);signal.throwIfAborted();return result;};
  log('Installing pinned dependencies with npm ci. Existing node_modules will be replaced. Grok off; inference disabled during setup.');
  if((await step({file:process.execPath,args:[npmPath,'ci','--include=dev','--include=optional'],capture:false,timeoutMs:600000})).code!==0)throw Error('Dependency installation failed. Check internet/registry access, then rerun npm run demo:live.');
- for(const provider of (openaiOnly?['codex']:['codex','claude']) as LoginProvider[]){
-  const auth=(action:'login'|'status')=>step({...authCommand(provider,action),capture:action==='status',timeoutMs:action==='status'?15000:300000});
-  if(!subscriptionReady(provider,await auth('status'))){
-   log(`Sign in to your own ${provider==='codex'?'ChatGPT':'Claude'} personal or enterprise account in the provider login flow. No API-key fallback.`);
-   if((await auth('login')).code!==0)throw Error(`${provider} login did not complete. Rerun when ready.`);
-   if(!subscriptionReady(provider,await auth('status')))throw Error(`${provider} provider account login not confirmed. Live startup refused.`);
-  }
-  log(`${provider}: provider account login confirmed (personal or enterprise; workspace/entitlement not verified).`);
- }
- log('Starting '+(openaiOnly?'OpenAI-only':'Codex/Claude')+' live demo. Open the URL printed below; Start discussion uses your provider account quota. Ctrl+C stops the server.');
+ // The guarded server owns status checks and the available-provider roster.
+ log('Checking '+(openaiOnly?'Codex':'OpenAI/Claude')+' account logins and starting the live UI; unavailable providers are skipped. Open the URL printed below. Start discussion uses account quota. Ctrl+C stops the server.');
  const result=await step({file:process.execPath,args:['--experimental-strip-types','scripts/start-real.ts','--enable-inference',...(openaiOnly?['--openai-only']:[])],capture:false,timeoutMs:0,purpose:'server'});
  if(result.code!==0)throw Error('Live demo server exited unsuccessfully. Check the message above; no automatic restart.');
 }

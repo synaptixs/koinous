@@ -60,7 +60,7 @@ the intended account and model availability before starting a discussion.
 Choose **one** command from the project folder. Stop an existing demo with
 **Ctrl+C** before starting live mode.
 
-**ChatGPT/Codex + Claude accounts — personal or enterprise:**
+**Available ChatGPT/Codex and/or Claude accounts — personal or enterprise:**
 
 ```sh
 npm run demo:live
@@ -73,9 +73,16 @@ npm run demo:live -- --openai-only
 ```
 
 The launcher installs pinned dependencies using `npm ci` (internet required),
-checks provider account login, and opens missing provider sign-in flows when needed.
+checks each provider account independently, and skips unavailable providers without
+opening browser login. A missing CLI, failed status check or unconfirmed subscription
+does not block another signed-in provider. Only confirmed account providers appear
+in the picker; optional Ollama discovery remains explicit.
 
-1. Complete any browser sign-in with the intended account.
+1. If no provider is signed in, startup prints the explicit setup commands. Run
+   `npm run setup -- login codex` and/or `npm run setup -- login claude` for the
+   accounts you want, complete the browser flow, then rerun the launcher. One is
+   enough: select two different model IDs from that provider. Models remain blank
+   until you choose them. `--openai-only` checks only Codex.
 2. Open the localhost URL printed in the terminal.
 3. In each participant row, click **Load models**, then choose from the **Model**
    dropdown. No model is preselected; starting requires a choice for every row.
@@ -90,6 +97,11 @@ checks provider account login, and opens missing provider sign-in flows when nee
 
 Setup sends no model prompts; **Start discussion** sends prompts and uses your
 account allowance. Grok stays off in both launchers. Stop with **Ctrl+C**.
+If no native account is ready, startup stops with setup guidance or the explicit
+Ollama-only option below. Dependency-installation errors still stop setup. A provider
+that fails after a discussion starts remains a recorded failure; selected participants
+are never silently removed or replaced. After signing in to a skipped provider,
+restart synqo to make it selectable.
 
 - Sign in with a **personal or enterprise OpenAI/Claude account**, including provider-managed SSO when required; model API-key fallback remains disabled.
 - Login status does not establish model entitlement, remaining quota, or corporate workspace selection.
