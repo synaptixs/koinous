@@ -29,6 +29,70 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Workflow colors and optional human feedback — 2026-11-06 UTC (offline)
+
+Running cards now have a pale blue fill; received-response cards and the completed
+flow use very light green. Text labels and distinct skipped/stopped/unknown states
+remain; reduced-motion support and execution-versus-quality caveats are retained.
+Human feedback moves out of the narrow sticky Session sidebar to a full-width
+panel below the collaboration flow, keeping its action reachable on desktop/mobile.
+The panel explains that no input is required and models do not pause for approval.
+
+Full-discussion feedback is accepted only when a future round can consume it.
+Engine.intervene determines the next unfrozen round from canonical round.started
+events, with round two the earliest consumer. Its accepted event records
+appliesFromRound. One-round, final-round, targeted, terminal, cancelling and stopping
+runs cannot silently record unused input. The existing immutable round prompts and
+interventions array remain compatible. UI confirmations name queue timing, preserve
+text after rejection and clear an old acknowledgement when new feedback is typed.
+Connection loss makes timing unknown and closes the send action. A later failure
+may prevent a queued round; acceptance does not claim a model adopted the input.
+
+For targeted/final-round work, feedback can be composed for later. Finished/live or
+saved records offer Prepare follow-up. The action GETs and validates the canonical
+read-only source, then replaces the unfinished setup with the recorded idea,
+context, selected models/roles/checks, selected decision/review/unresolved fields
+and current human feedback. Duplicate draft/coverage/audit fields are excluded
+explicitly; the full original record and transcript remain unchanged. Prior output
+and human assertions are labeled unverified input. Research starts off; historic
+references are not new evidence and the evidence snapshot is not copied. No
+inference, catalog or search call runs during preparation. New model calls require
+reviewing the setup and clicking Start discussion. Oversize context is displayed
+without clipping and blocks Start until edited below the existing 6000-character
+limit. Missing legacy facts remain explicit. Failed preparation preserves feedback
+and the source. Start clears the earlier no-calls preparation notice. Unsent drafts
+are in-page only. No retry, hidden synthesis or automatic model fallback is added.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Canonical lifecycle/intervention semantics and measured PKG impact | Passed |
+| Implement | 25% | Card colors, feedback timing and explicit later follow-up preparation | Passed |
+| Verify | 25% | TypeScript, 674 Node + 33 Python tests; desktop/mobile mock checks | Passed |
+| Document | 25% | Guide, API semantics, rationale and validation recorded | Passed |
+
+PKG measured against clean ccca3e7 before initial edits (callers/docs): refresh23/1,
+renderWorkflowFlow4/1, recordWorkflowEvent2/1, beginWorkflowProgress2/1,
+resetSessionView1/1, finish3/1, openSaved2/1, navigateWorkspace1/1,
+app-module0/1 and Engine.intervene1/0 (createApplication). renderWorkspace1/1 was
+additionally measured against a clean external scratch worktree of ccca3e7 after
+the initial draft. No blast/gap truncation; JS/TS untraced calls are not tracked,
+so caller counts are floors. UI gaps identify refresh, restoreConfiguration,
+navigation, addParticipant, finish, loadSavedList, openSaved, restoreSavedView,
+setParticipants and module callbacks; VM UI tests are not graph-linked. Engine
+intervene is reached by tests, with uncovered server/demo/start-real/secure-server
+module callbacks. New engine cases verify exact frozen prompt consumption and
+persisted applicable rounds, no-effect/final-round rejection and stop/cancel guards.
+Five new UI cases verify timing/colors, targeted/disconnect state, GET-only follow-up
+and explicit new dispatch, original preservation, unverified data, research off,
+context bounds/no clipping, notice reset and absent/stale legacy facts.
+
+Offline browser verification uses only MockAdapters and temporary records. It
+checks pale running/completed fills, actual round-two feedback acknowledgement,
+reachable follow-up action, prepared editable context with zero new calls, source
+preservation, mobile width and read-only reopening. No real provider, model,
+authentication or research calls are authorized or run. Overall48.33% and P6 80%
+remain unchanged; empirical E5 and other deferred/unestimated tracks stay open.
+
 ### Configuration workspace — 2026-11-05 (offline)
 
 Implements the accepted Workspace direction for participants/models, research, idea

@@ -53,7 +53,53 @@ let historyLoading = false, historyPage = 1, historyQuery = '', historyPrevious 
 let historyFilters = {provider:'', model:'', from:'', to:''};
 let pendingSavedSession = null;
 let workspaceView='new',reviewingSaved=false,draftConfiguration=null,sessionAttempted=false;
+let discussionState=null,feedbackPending=false,feedbackNotice='';
 const configurationFields=['question','context','rounds','workflowMode','author','acceptanceChecks','researchMode','researchQuery'];
+function canQueueFeedback(){
+  return !!sessionId&&busy&&!discussionState?.terminal&&discussionState?.mode==='discussion'&&!discussionState.stopping&&discussionState.status!=='Connection lost'&&Math.max(2,discussionState.lastStarted+1)<=discussionState.maxRounds;
+}
+function renderFeedback(){
+  const state=discussionState,canQueue=canQueueFeedback(),finished=!!sessionId&&!!state?.terminal&&!busy;
+  const message=$('intervene').value.trim(),invalid=message.length>1000;
+  $('intervene').disabled=!sessionId||feedbackPending;
+  $('send').hidden=state?.mode==='targeted'||finished;
+  $('send').disabled=!canQueue||feedbackPending||!message||invalid;
+  $('send').textContent=canQueue?'Send to next round':'Next round unavailable';
+  $('prepareFeedback').hidden=!finished;$('followupHelp').hidden=!finished;
+  $('prepareFeedback').disabled=!finished||feedbackPending||historyLoading||!message||invalid;
+  $('feedbackHint').textContent=!sessionId?'Start or open a discussion to add feedback.':state?.status==='Connection lost'?'Connection lost: timing is unknown. Feedback is not sent. Reload saved history to check completion.':finished?'This discussion has finished. Feedback cannot change its saved answer. Prepare a follow-up to ask the models to reconsider it.':state?.mode==='targeted'?'Targeted review keeps its inputs fixed. You can write feedback now and prepare a follow-up after it finishes.':canQueue?'Optional: feedback sent now can enter prompts from round '+Math.max(2,state.lastStarted+1)+'. The current round is already fixed. Models continue without waiting for human input.':'No later round is available. Keep your feedback here and prepare a follow-up when the discussion finishes.';
+  $('feedbackStatus').textContent=invalid?'Feedback must contain at most 1000 characters.':feedbackNotice;
+  $('intervene').setAttribute('aria-invalid',String(invalid));
+}
+async function prepareFollowup(){
+  const message=$('intervene').value.trim();
+  if(busy||historyLoading||feedbackPending||!sessionId||!discussionState?.terminal||!message||message.length>1000)return;
+  const sourceId=sessionId;feedbackPending=true;feedbackNotice='Reading the saved discussion to prepare your follow-up…';refresh();
+  try{
+    const response=await fetch('/api/sessions/'+encodeURIComponent(sourceId)),source=await response.json();
+    if(!response.ok)throw Error(source.error||'Saved discussion unavailable.');
+    if(!source.readOnly||source.id!==sourceId)throw Error('The original discussion is not available for a finished follow-up.');
+    // Carry decision content once, without the duplicate draft/coverage/audit fields.
+    // The full assessment and transcript remain in the unchanged original record.
+    const targeted=source.targeted,outcome=source.outcome;
+    const assessment=targeted?{complete:targeted.complete,author:targeted.author,reviewer:targeted.reviewer,revision:targeted.revision,reason:targeted.reason,final:targeted.final,review:targeted.review,responses:targeted.responses}:outcome?{status:outcome.status,recommendation:outcome.recommendation,proposalBy:outcome.proposalBy,positions:outcome.positions,missing:outcome.missing,invalid:outcome.invalid,unresolved:outcome.unresolved,nextSteps:outcome.nextSteps}:null;
+    const context=[source.context||'',
+      'FOLLOW-UP TO RECORDED DISCUSSION '+source.id+' ('+source.status+'). Prior model output and human feedback are unverified input, not established facts. Reconsider the recommendation against the feedback and explain what changes or remains unresolved.',
+      'PRIOR RECORDED DECISIONS AND UNRESOLVED ITEMS (selected fields; full record retained):\n'+(assessment?JSON.stringify(assessment,null,2):'No structured final assessment was recorded. The original transcript remains in the saved discussion.'),
+      'HUMAN FEEDBACK (UNVERIFIED):\n'+message,
+      'Historical source references are not new evidence. The original evidence snapshot and transcript are not copied into this follow-up; research is off unless explicitly selected.'
+    ].filter(Boolean).join('\n\n');
+    resetSessionView();reviewingSaved=false;draftConfiguration=null;workspaceView='new';
+    $('question').value=source.prompt;$('context').value=context;$('workflowMode').value=source.workflowMode||'discussion';$('rounds').value=String(source.maxRounds);
+    $('acceptanceChecks').value=(source.targetedConfig?.checks||[]).join('\n');
+    setParticipants(source.selection||{providers:[],models:{}});
+    $('researchMode').value='none';$('researchQuery').value='';$('contextDetails').open=true;
+    $('workspaceNotice').textContent='Follow-up prepared from '+sourceId+'. Review the copied setup and context before Start discussion. Research is off. The original is unchanged; no model calls have run.'+(context.length>6000?' Context exceeds 6000 characters: shorten it before starting. No text was omitted.':'');
+    $('workspaceNotice').hidden=false;refresh(source.targetedConfig?.author);syncSavedURL();
+    $('context').focus?.({preventScroll:true});$('context').scrollIntoView?.({block:'center'});
+  }catch(error){feedbackNotice='Follow-up not prepared: '+error.message+' Your feedback and the original discussion are unchanged.';}
+  finally{feedbackPending=false;refresh();}
+}
 function captureConfiguration(){return {fields:Object.fromEntries(configurationFields.map(id=>[id,$(id).value])),rows:rows.map(row=>({id:row.id,model:row.model.value,customMode:row.customMode})),contextOpen:$('contextDetails').open,advancedOpen:$('advancedSettings').open};}
 function restoreConfiguration(snapshot){
   for(const [id,value] of Object.entries(snapshot.fields))$(id).value=value;
@@ -68,6 +114,7 @@ function resetSessionView(){
   for(const id of ['report','jsonReport']){$(id).style.display='none';$(id).href='#';}
   $('saveStatus').textContent='Discussions save automatically when finished.';$('send').disabled=true;$('cancel').disabled=true;
   $('savedConfiguration').replaceChildren();$('savedConfiguration').hidden=true;
+  discussionState=null;feedbackNotice='';renderFeedback();
 }
 function showSavedConfiguration(saved){
   const root=$('savedConfiguration');root.replaceChildren(viewNode('h3','Recorded setup'),readableText(saved.prompt));
@@ -84,10 +131,10 @@ function renderWorkspace(){
   $('sessionResults').hidden=workspaceView==='saved'?!reviewingSaved:!sessionId&&!sessionAttempted;
   $('workspaceTitle').textContent=workspaceView==='saved'?'Saved discussions':'Configure your discussion';
   $('workspaceSubtitle').textContent=workspaceView==='saved'?'Open recorded discussions for read-only review. Your setup draft is preserved.':'Choose your models and sources, then describe your decision.';
-  for(const [id,view] of [['navNew','new'],['navSaved','saved']]){$(id).className='nav-button'+(workspaceView===view?' is-current':'');$(id).setAttribute('aria-pressed',String(workspaceView===view));$(id).disabled=busy||historyLoading;}
+  for(const [id,view] of [['navNew','new'],['navSaved','saved']]){$(id).className='nav-button'+(workspaceView===view?' is-current':'');$(id).setAttribute('aria-pressed',String(workspaceView===view));$(id).disabled=busy||historyLoading||feedbackPending;}
 }
 function navigateWorkspace(view){
-  if(busy||historyLoading)return;
+  if(busy||historyLoading||feedbackPending)return;
   if(view==='saved')$('workspaceNotice').textContent='';
   if(view==='new'&&(reviewingSaved||sessionId||sessionAttempted)){const snapshot=draftConfiguration;reviewingSaved=false;draftConfiguration=null;resetSessionView();if(snapshot)restoreConfiguration(snapshot);$('workspaceNotice').textContent=snapshot?'Your setup draft was restored. The saved discussion is unchanged.':'';}
   workspaceView=view;$('workspaceNotice').hidden=!$('workspaceNotice').textContent;refresh();syncSavedURL();
@@ -114,17 +161,19 @@ function refresh(preferredAuthor) {
   const pendingCloudSetup=selected.some(row=>row.provider==='ollama-cloud'&&cloudSetup?.examples.some(example=>example.model===row.model.value.trim())&&!row.availableModels.includes(row.model.value.trim()));
   const unavailableResearch=['web','both'].includes($('researchMode').value)&&!webSearchAvailable;
   const unavailableParticipant=rows.some(row=>!row.id||!participantOptions.some(option=>option.id===row.id));
-  const researchEnabled=['wikipedia','web','both'].includes($('researchMode').value),badQuery=researchEnabled&&(!$('researchQuery').value.trim()||$('researchQuery').value.length>300),missingIdea=!$('question').value.trim();
+  const researchEnabled=['wikipedia','web','both'].includes($('researchMode').value),badQuery=researchEnabled&&(!$('researchQuery').value.trim()||$('researchQuery').value.length>300),missingIdea=!$('question').value.trim(),longContext=$('context').value.length>6000;
   const error = !ready ? 'Provider configuration unavailable.' : unavailableParticipant ? 'Choose an available provider for every participant.' : targeted&&(rows.length!==2||selected.some(row=>row.provider==='grok'))?'Targeted review requires exactly two OpenAI, Claude or Ollama participants.': chosen.providers.length < 2 ? 'Choose at least two participants.' : chosen.providers.length>3 ? 'Choose at most three participants.' : unavailableResearch ? 'Web search is not configured on this server. Choose Wikipedia or no research.' : unavailableLocal ? 'Refresh installed models and choose a model available on this machine.' : pendingCloudSetup ? 'Register the selected cloud setup example in Ollama, then Refresh models to confirm it.' : missingModel ? 'Choose a model for every participant.' : duplicateModel ? 'For the same provider, enter two different model IDs available to your account.' : invalidModel ? 'Enter a valid model ID (up to 128 characters).' : badQuery?'Enter public search keywords (1–300 characters).':missingIdea?'Describe your idea before starting.':'';
   $('selectionError').textContent = error || (!inferenceEnabled ? 'Inference is disabled. Saved discussions can still be reviewed.' : '');
-  $('run').disabled = busy || historyLoading || reviewingSaved || workspaceView!=='new' || !!error || !inferenceEnabled;
+  $('run').disabled = busy || historyLoading || feedbackPending || reviewingSaved || workspaceView!=='new' || !!error || longContext || !inferenceEnabled;
+  if(longContext)$('selectionError').textContent='Context exceeds 6000 characters. Shorten it before starting; no text was omitted.';
+  $('contextError').textContent=longContext?'Context: '+$('context').value.length+' / 6000 characters. Shorten before starting. No text was omitted.':'';$('context').setAttribute('aria-invalid',String(longContext));
   $('researchQueryField').hidden=!researchEnabled;$('researchError').textContent=badQuery?'Enter a public query of 1–300 characters.':'';$('researchQuery').setAttribute('aria-invalid',String(badQuery));
   $('ideaError').textContent=missingIdea?'An idea is required to start.':'';$('question').setAttribute('aria-invalid',String(missingIdea));
-  $('setupState').textContent=workspaceView==='saved'?(reviewingSaved?'Read-only review':'Saved history'):busy?'Discussion running':error?'Setup needed':!inferenceEnabled?'Inference disabled':'Ready to start';$('setupState').className='setup-state'+(!error&&!busy&&inferenceEnabled&&workspaceView==='new'?' is-ready':'');
+  $('setupState').textContent=workspaceView==='saved'?(reviewingSaved?'Read-only review':'Saved history'):busy?'Discussion running':error||longContext?'Setup needed':!inferenceEnabled?'Inference disabled':'Ready to start';$('setupState').className='setup-state'+(!error&&!longContext&&!busy&&inferenceEnabled&&workspaceView==='new'?' is-ready':'');
   const researchLabel={none:'research off',wikipedia:'Wikipedia',web:'Brave web search',both:'Wikipedia + Brave'}[$('researchMode').value]||'research off';
   $('runConfigurationSummary').textContent=rows.length+' participants · '+rows.map(row=>(providerOptions.find(option=>option.id===row.provider)?.label||'provider not chosen')+' / '+(row.model.value.trim()||'model not chosen')).join(' + ')+' · '+(targeted?'Draft + review':'Full discussion')+' · '+researchLabel;
-  $('openSaved').disabled = busy || historyLoading || !$('savedSessions').value;
-  for (const id of ['savedProvider','savedModel','savedFrom','savedTo','savedSessions','refreshSaved','savedSearch','searchSaved','clearSaved']) $(id).disabled = busy || historyLoading;
+  $('openSaved').disabled = busy || historyLoading || feedbackPending || !$('savedSessions').value;
+  for (const id of ['savedProvider','savedModel','savedFrom','savedTo','savedSessions','refreshSaved','savedSearch','searchSaved','clearSaved']) $(id).disabled = busy || historyLoading || feedbackPending;
   $('previousSaved').disabled = busy || historyLoading || !historyPrevious;
   $('nextSaved').disabled = busy || historyLoading || !historyNext;
   $('rounds').disabled = busy || targeted;
@@ -157,8 +206,8 @@ function refresh(preferredAuthor) {
   }
   $('plannedCalls').textContent = targeted?3:rows.length * Number($('rounds').value);
   if (!sessionId) $('maxCalls').textContent = $('plannedCalls').textContent;
-  renderWorkspace();
-  return !error;
+  renderWorkspace();renderFeedback();
+  return !error&&!longContext;
 }
 function append(title, body, who = '') {
   const d = document.createElement('div'); d.className = 'message ' + who;
@@ -275,6 +324,7 @@ function workflowKey() {
 function renderWorkflowFlow() {
   const targeted=$('workflowMode').value==='targeted',author=rows.find(row=>row.id===$('author').value),reviewer=rows.find(row=>row.id&&row!==author);
   const progress=workflowProgress?.key===workflowKey()?workflowProgress:null;
+  $('workflowSetup').className='workflow-setup'+(progress?.status==='completed'?' is-complete':progress?.active?' is-running':'');
   const titles=targeted?['Draft','Targeted review','Revision if needed']:['Independent views','Peer critique','Revised positions'];
   const descriptions=targeted?['The author proposes a recommendation.','The other model checks for consequential mistakes.','The author responds only to material findings.']:['Each participant develops its own recommendation.','Participants challenge the other recommendations.','Participants respond to critiques and state their final positions.'];
   $('roleNote').textContent=targeted?'Two calls by default. A third call runs only when the review identifies material findings. Each step uses a fresh request.':'Participants exchange views over the selected rounds. Each round includes every selected participant.';
@@ -309,6 +359,7 @@ function renderWorkflowFlow() {
   if($('workflowProgress').textContent!==notice)$('workflowProgress').textContent=notice;
 }
 function beginWorkflowProgress(saved) {
+  discussionState={mode:saved?.workflowMode||$('workflowMode').value,maxRounds:saved?.maxRounds||Number($('rounds').value),lastStarted:0,terminal:!!saved,stopping:false,status:saved?.status||'Preparing'};
   workflowProgress={key:workflowKey(),active:null,started:new Set(),done:new Set(),stopped:new Set(),status:saved?.status||'Preparing',revision:saved?.targeted?.revision||null,saved:!!saved};
   if(!saved)return;
   for(const event of saved.events||[])recordWorkflowEvent(event);
@@ -326,6 +377,11 @@ function beginWorkflowProgress(saved) {
 }
 function recordWorkflowEvent(event) {
   if(!workflowProgress)return;
+  if(discussionState){
+    if(event.type==='round.started')discussionState.lastStarted=Math.max(discussionState.lastStarted,event.round);
+    if(['discussion.stopped','session.error','budget.denied','cancel.requested'].includes(event.type))discussionState.stopping=true;
+    if(event.type==='session.finished'){discussionState.terminal=true;discussionState.status=event.status;}
+  }
   if(event.type==='round.started'){workflowProgress.active=event.round;workflowProgress.started.add(event.round);workflowProgress.status='Running';}
   if(event.type==='round.completed'){workflowProgress.done.add(event.round);if(workflowProgress.active===event.round)workflowProgress.active=null;}
   if(event.type==='targeted.assessed')workflowProgress.revision=event.targeted.revision;
@@ -453,6 +509,7 @@ $('rounds').onchange = refresh;
 $('workflowMode').onchange=refresh;$('author').onchange=refresh;
 $('researchMode').onchange=refresh;
 for(const id of ['question','context','acceptanceChecks','researchQuery'])$(id).oninput=refresh;
+$('intervene').oninput=()=>{feedbackNotice='';renderFeedback();};$('prepareFeedback').onclick=prepareFollowup;
 $('participantCount').onchange=()=>{
   const count=Number($('participantCount').value),author=$('author').value;
   if(busy||!ready||![2,3].includes(count)||(count===3&&participantOptions.length<3)){refresh();return;}
@@ -465,14 +522,15 @@ $('usePair').onclick=()=>{if(busy||$('usePair').disabled)return;setParticipants(
 function finish(status) {
   if(workflowProgress){workflowProgress.status=status;workflowProgress.active=null;}
   busy = false; $('status').textContent = status; $('send').disabled = true; $('cancel').disabled = true;
+  if(discussionState){discussionState.terminal=true;discussionState.status=status;}
   if (events) events.close(); refresh();
 }
 $('run').onclick = async () => {
-  if (busy || historyLoading || reviewingSaved || workspaceView!=='new' || !refresh() || !inferenceEnabled) return;
+  if (busy || historyLoading || feedbackPending || reviewingSaved || workspaceView!=='new' || !refresh() || !inferenceEnabled) return;
   const request = {prompt: $('question').value, context: $('context').value, grounding: 'none', maxRounds: Number($('rounds').value), selection: selection(),workflowMode:$('workflowMode').value};
   if(request.workflowMode==='targeted'){request.maxRounds=3;request.author=$('author').value;request.checks=$('acceptanceChecks').value.split('\n').map(s=>s.trim()).filter(Boolean);}
   if(['wikipedia','web','both'].includes($('researchMode').value))request.research={mode:$('researchMode').value,query:$('researchQuery').value};
-  beginWorkflowProgress();sessionId = null; sessionAttempted=true; pendingSavedSession=null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; $('saveStatus').textContent = 'Saving discussion events as they arrive. The finished session will appear in Saved discussions.'; refresh();
+  $('intervene').value='';feedbackNotice='';$('workspaceNotice').hidden=true;$('workspaceNotice').textContent='';beginWorkflowProgress();sessionId = null; sessionAttempted=true; pendingSavedSession=null; syncSavedURL(); busy = true; $('reviewNotice').textContent = ''; $('saveStatus').textContent = 'Saving discussion events as they arrive. The finished session will appear in Saved discussions.'; refresh();
   if (events) events.close();
   $('outcome').textContent = 'Available after the discussion.'; $('evidence').textContent = 'Idea and optional context';
   $('feed').replaceChildren(); $('status').textContent = 'Creating'; $('calls').textContent = '0'; $('cost').textContent = 'Unknown'; $('report').style.display = 'none';$('jsonReport').style.display='none';$('tokenTotals').textContent='Awaiting token accounting';$('tokenDetails').replaceChildren();
@@ -484,7 +542,7 @@ $('run').onclick = async () => {
     events = new EventSource('/api/sessions/' + sessionId + '/events');
     events.onmessage = event => {
       if(sessionId!==startedSessionId||!busy)return;
-      const x = JSON.parse(event.data);recordWorkflowEvent(x);renderWorkflowFlow();
+      const x = JSON.parse(event.data);recordWorkflowEvent(x);renderWorkflowFlow();renderFeedback();
       switch (x.type) {
         case 'participants.configured': $('maxCalls').textContent = x.maxCalls; append('Selected participants', x.agents.map(id => id + ': ' + (x.selection?.models[id] || 'SDK default')).join('\n')); break;
         case 'runtime.preparing': $('status').textContent = 'Preparing runtime'; append('Runtime · ' + x.agent, 'Provisioning and verifying the isolated runtime before model calls'); break;
@@ -503,20 +561,26 @@ $('run').onclick = async () => {
         case 'agent.started': $('calls').textContent = x.call; break;
         case 'agent.completed': appendResponse(x); $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); break;
         case 'agent.error': append('Provider error · ' + x.agent, x.error); break;
-        case 'human.intervention': append('Human intervention', x.message); break;
+        case 'human.intervention': append('Human feedback', x.message);feedbackNotice=x.appliesFromRound?'Queued from round '+x.appliesFromRound+'. Calls already in progress are unchanged; a later stop may prevent that round.':'Feedback recorded. Its application timing was not reported.';renderFeedback();break;
         case 'session.error': append('Error', x.error); break;
         case 'session.finished': showTokens(x.tokenAccounting); finish(x.status);$('jsonReport').href='/api/sessions/'+sessionId+'/report?format=json';$('jsonReport').style.display='inline'; $('cost').textContent = '$' + Number(x.spendKnownUSD).toFixed(4) + (x.spendIncomplete ? ' (partial; unknown costs)' : ' (accounting value)'); $('report').href = '/api/sessions/' + sessionId + '/report'; $('report').style.display = 'inline'; syncSavedURL();
           $('saveStatus').textContent='Saved automatically. Updating Saved discussions…';
           void loadSavedList(historyPage,historyQuery,historyFilters,true,{id:startedSessionId,status:x.status,prompt:request.prompt}); break;
       }
     };
-    events.onerror = () => { if(sessionId!==startedSessionId||!busy)return; append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost';$('saveStatus').textContent='Completion has not been confirmed. Reload to check Saved discussions; this does not cancel the running session.';if(workflowProgress){workflowProgress.active=null;workflowProgress.status='Connection lost';renderWorkflowFlow();} };
+    events.onerror = () => { if(sessionId!==startedSessionId||!busy)return; append('Connection lost', 'The discussion may still be running. Reloading or starting again does not cancel it.'); events.close(); $('status').textContent = 'Connection lost';$('saveStatus').textContent='Completion has not been confirmed. Reload to check Saved discussions; this does not cancel the running session.';if(workflowProgress){workflowProgress.active=null;workflowProgress.status='Connection lost';renderWorkflowFlow();}if(discussionState)discussionState.status='Connection lost';renderFeedback(); };
   } catch (error) { append('Error', error.message); $('saveStatus').textContent='Discussion did not start; no finished session was confirmed.'; finish('Failed to start'); }
 };
 $('send').onclick = async () => {
-  const message = $('intervene').value.trim(); if (!sessionId || !message) return;
-  const response = await fetch('/api/sessions/' + sessionId + '/interventions', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message})});
-  if (response.ok) $('intervene').value = ''; else append('Error', (await response.json()).error);
+  const message=$('intervene').value.trim();if(!canQueueFeedback()||feedbackPending||!message||message.length>1000)return;
+  feedbackPending=true;feedbackNotice='Sending feedback…';refresh();
+  try{
+    const response=await fetch('/api/sessions/'+sessionId+'/interventions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});
+    if(!response.ok){const failure=await response.json();throw Error(failure.error||'Feedback was not accepted.');}
+    if($('intervene').value.trim()===message)$('intervene').value='';
+    if(feedbackNotice==='Sending feedback…')feedbackNotice='Feedback accepted. The event log records its earliest applicable round; completed calls are unchanged.';
+  }catch(error){feedbackNotice='Feedback not queued: '+error.message+' Your text is retained.';}
+  finally{feedbackPending=false;refresh();}
 };
 $('cancel').onclick = async () => { if (sessionId) await fetch('/api/sessions/' + sessionId + '/cancel', {method: 'POST'}); };
 
@@ -635,7 +699,7 @@ async function loadSavedList(page = historyPage, query = historyQuery, filters =
   finally { historyLoading = false; refresh(); }
 }
 async function openSaved(id) {
-  if (busy || !id) return;
+  if (busy || feedbackPending || !id) return;
   busy = true; refresh();
   try {
     await configurationReady;
@@ -643,6 +707,7 @@ async function openSaved(id) {
     const s = await response.json();
     if (!response.ok) throw Error(s.error || 'Saved discussion unavailable.');
     if (!s.readOnly) throw Error('This discussion is still active; wait until it finishes.');
+    if(sessionId!==s.id){$('intervene').value='';feedbackNotice='';}
     if(!reviewingSaved)draftConfiguration=captureConfiguration();
     reviewingSaved=true;workspaceView='saved';$('workspaceNotice').hidden=true;
     if (events) events.close();

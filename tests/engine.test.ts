@@ -203,3 +203,29 @@ test('invalid injected rosters fail before grounding or provider calls', async t
     assert.equal(session.evidence,undefined);
   }
 });
+
+test('feedback names its earliest consuming round and is frozen out of earlier prompts',async t=>{
+ const {engine,prompts,output}=setup(t);const session=engine.create('Review with human input',3);
+ engine.intervene(session,'BEFORE_FIRST_ROUND');
+ engine.on(session.id,event=>{if(event.type==='round.started'&&event.round===2)engine.intervene(session,'DURING_SECOND_ROUND');});
+ await engine.run(session);
+ const feedback=session.events.filter(event=>event.type==='human.intervention');assert.deepEqual(feedback.map(event=>event.appliesFromRound),[2,3]);
+ for(const p of prompts){
+  assert.equal(p.prompt.includes('BEFORE_FIRST_ROUND'),p.round>=2);
+  assert.equal(p.prompt.includes('DURING_SECOND_ROUND'),p.round>=3);
+ }
+ const persisted=readFileSync(join(output,session.id,'events.jsonl'),'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.deepEqual(persisted.filter(event=>event.type==='human.intervention').map(event=>event.appliesFromRound),[2,3]);
+ assert.throws(()=>engine.intervene(session,'After completion'),/not active/);
+});
+
+test('feedback is rejected for one-round and already-started final rounds without recording unused input',async t=>{
+ const one=setup(t);const short=one.engine.create('One round',1);assert.throws(()=>one.engine.intervene(short,'Too late even before start'),/No future round/);assert.deepEqual(short.interventions,[]);
+ const {engine,prompts}=setup(t);const session=engine.create('Two rounds',2);let rejected=false;
+ engine.on(session.id,event=>{if(event.type==='round.started'&&event.round===2){assert.throws(()=>engine.intervene(session,'NEVER_CONSUMED'),/No future round/);rejected=true;}});
+ await engine.run(session);assert.equal(rejected,true);assert.deepEqual(session.interventions,[]);assert.ok(prompts.every(p=>!p.prompt.includes('NEVER_CONSUMED')));assert.equal(session.events.some(event=>event.type==='human.intervention'),false);
+});
+
+test('cancelled and stopping discussions refuse feedback before terminal cleanup',async t=>{
+ const {engine}=setup(t);const cancelled=engine.create('Cancel');engine.cancel(cancelled);assert.throws(()=>engine.intervene(cancelled,'Late input'),/No future round/);
+ for(const type of ['discussion.stopped','session.error','budget.denied']){const s=engine.create('Stopping');s.status='running';engine.emitEvent(s,type);assert.throws(()=>engine.intervene(s,'Late input'),/No future round/);assert.deepEqual(s.interventions,[]);}
+});

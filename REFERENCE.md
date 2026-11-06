@@ -363,7 +363,7 @@ The tool's **actual server-side authorization** must enforce read-only behavior,
 - `POST /api/sessions` with `{ "prompt": "...", "maxRounds": 3 }`
 - `GET /api/sessions/:id` session state
 - `GET /api/sessions/:id/events` live Server-Sent Events, replay via `Last-Event-ID`
-- `POST /api/sessions/:id/interventions` with `{ "message": "..." }` adds feedback at next round boundary
+- `POST /api/sessions/:id/interventions` with `{ "message": "..." }` queues 1–1000 characters for a future full-discussion round. Accepted `human.intervention` events include `appliesFromRound`; current prompts stay frozen. Targeted, terminal, stopping/cancelled, one-round and already-started final-round sessions reject unused input. A later failure can still prevent the queued round. The UI offers GET-only follow-up preparation for finished records; starting the new discussion requires its normal explicit POST.
 - `POST /api/sessions/:id/cancel` best-effort cancellation
 - `GET /api/sessions/:id/report` generated Markdown report
 - `GET /api/health`
