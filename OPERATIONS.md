@@ -30,6 +30,25 @@ Provider-managed enterprise browser login is distinct from synqo's own OIDC/brow
 sessions. Correct corporate workspace, organization policies, seats and entitlement
 must still be established for an actual corporate acceptance run.
 
+## Available providers at local startup
+
+`demo:live` installs dependencies, then delegates to `start:real` for independent
+OpenAI/Claude subscription-status checks. Missing CLI, status failures/timeouts and
+unconfirmed accounts are skipped, with no automatic login or API-key fallback.
+The server excludes skipped native providers from health/picker/API choices. One
+confirmed provider suffices for two distinct explicit model IDs. If neither is
+confirmed, startup stops with explicit login, Ollama-only and mock alternatives.
+`--openai-only` checks only Codex; `--ollama-only` performs no native account check.
+Optional Ollama metadata discovery remains explicit, not a startup probe.
+
+Use `npm run setup -- login codex` and/or `npm run setup -- login claude` only for
+the desired accounts, then restart. Status output never establishes workspace,
+model entitlement or quota. Dependency-installation failures still stop startup.
+An account that fails after discussion dispatch remains a recorded provider failure;
+the existing roster and stop/partial-evidence semantics do not change. No participant
+is silently dropped from an active run or substituted. Existing saved records stay
+readable when their original provider is disabled for new discussions.
+
 ## Offline acceptance (no authentication or inference)
 
 From the repository root:

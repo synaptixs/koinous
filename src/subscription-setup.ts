@@ -38,13 +38,16 @@ export function subscriptionReady(provider:LoginProvider,result:AuthResult):bool
  if(provider==='codex')return (result.stdout+'\n'+result.stderr).trim()==='Logged in using ChatGPT';
  try{const data=JSON.parse(result.stdout);return data.loggedIn===true&&data.authMethod==='claude.ai';}catch{return false;}
 }
-export async function checkSubscriptions(run:AuthRunner=runAuth){
+export async function checkSubscriptions(run:AuthRunner=runAuth,providers:readonly LoginProvider[]=['codex','claude']){
  const result={codex:false,claude:false};
- for(const provider of ['codex','claude'] as const)result[provider]=subscriptionReady(provider,await run(provider,'status'));
+ for(const provider of providers){
+  // An absent CLI, timeout or unconfirmed account must not hide another provider.
+  try{result[provider]=subscriptionReady(provider,await run(provider,'status'));}catch{result[provider]=false;}
+ }
  return result;
 }
 export async function setup(args:string[],run:AuthRunner=runAuth):Promise<string>{
- if(!args.length)return 'Provider account setup — personal or enterprise (no model calls):\n1. npm ci\n2. npm run setup -- login codex\n3. npm run setup -- login claude\n4. npm run setup -- status\nThen: npm run start:real -- --enable-inference\nSign in with your personal or enterprise ChatGPT/Claude account in the provider browser flow, including SSO when your organization requires it. Confirm the intended workspace and administrator access. Never paste keys into synqo. Setup does not enable inference.';
+ if(!args.length)return 'Provider account setup — personal or enterprise (no model calls):\n1. npm ci\n2. Sign in only to the providers you want: npm run setup -- login codex and/or npm run setup -- login claude\n3. npm run setup -- status\nThen: npm run start:real -- --enable-inference\nUnavailable providers are skipped at startup; no automatic browser login. Sign in with your personal or enterprise ChatGPT/Claude account in the provider browser flow, including SSO when your organization requires it. Confirm the intended workspace and administrator access. Never paste keys into synqo. Setup does not enable inference.';
  if(args.length===1&&args[0]==='status'){
   const ready=await checkSubscriptions(run);
   return `Codex account login (personal or enterprise): ${ready.codex?'ready':'not confirmed'}\nClaude account login (personal or enterprise): ${ready.claude?'ready':'not confirmed'}\nLogin state does not verify the selected enterprise workspace, organization entitlement or quota. No model call was made.`;

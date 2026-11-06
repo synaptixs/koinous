@@ -29,6 +29,64 @@ New P6 weights below partition its work for tracking, not the overall gate.
 Previous offline implementation: review, implement, verify, document complete (4/4); delivered in PR #8 (https://github.com/synaptixs/koinous/pull/8), merged at c648369. P6 track is 80%; empirical E5 remains 0/1. Final empirical completion requires real evidence, not mocks.
 
 
+### Skip unavailable account providers — 2026-11-06 (offline)
+
+Local live startup now checks OpenAI/Claude subscription status independently and
+skips unconfirmed providers. Missing CLI, failed/timed-out status, signed-out account
+and API-key login all remain unconfirmed; generic notices name the skipped provider
+and its explicit setup login command, without printing raw status/errors. No browser
+login opens automatically. checkSubscriptions also lets setup -- status report the
+other provider after one command fails. Explicit login behavior is unchanged.
+
+demo:live owns installation and delegates account checks to guarded start:real,
+avoiding duplicate checks. Both eligible native accounts preserve the existing
+default pair; one eligible account exposes two participant slots with empty model
+IDs. The user chooses distinct models. Skipped native providers are disabled through
+the existing health/picker/API contract, including aliases. If neither is eligible,
+startup stops with explicit login, Ollama-only and mock alternatives. OpenAI-only
+still checks only Codex; Ollama-only checks neither native account. Optional Ollama
+still uses explicit discovery; no daemon/account availability is invented.
+
+Inference stays off until the existing startup guard succeeds, and startup creates
+no sessions/prompts. Installer failures, cancellation and server failures stay fatal.
+No account/model fallback, retry, model preselection or silent removal of an active
+participant is added. A selected provider failing later retains the existing stop
+and partial-evidence behavior. Historical saved records remain readable. A skipped
+account becomes selectable after explicit sign-in and server restart. This change
+does not fix unrelated registry/DNS installation failures or expand live authorization.
+
+| Iteration phase | Weight | Gate | State |
+|---|---:|---|---|
+| Review | 25% | Owning startup/status/config contracts and measured PKG impact | Passed |
+| Implement | 25% | Independent status, explicit skip notices, available-only defaults | Passed |
+| Verify | 25% | TypeScript, 704 Node + 33 Python tests, including startup/health cases | Passed |
+| Document | 25% | Guides, rationale, validation and final review recorded | Passed |
+
+PKG measured on clean b326527 before edits (callers/docs): demoLive9/0,
+preparePersonalDiscussion8/0, checkSubscriptions3/0, setup8/0, scripts/start-real0/0.
+No blast truncation; TypeScript untraced calls are not tracked, so counts are floors.
+Node-ID gap queries did not resolve; short names correctly resolved the first three
+functions, all tested. Their uncovered reach is scripts/demo-live, scripts/start-real
+and scripts/setup CLI modules. setup's short-name query incorrectly resolved Python
+setUp; checkSubscriptions' correctly resolved gap result lists subscription setup as
+covered, supplemented by direct setup tests. Do not count the unrelated Python query
+as setup coverage. Offline subprocess help/invalid-start cases cover CLI entry paths;
+the single-provider matrix checks real application health and disabled discovery
+routes using injected status runners, with no SDK/account/model requests.
+
+Full npm run check passed TypeScript, 704 Node and 33 Python tests. Nine new cases
+cover the two-way missing/signed-out/API-login matrix, independent status after
+exceptions, no-eligible-account recovery and offline CLI entry points; four obsolete
+automatic-login tests were replaced. Existing install/server failure, cancellation,
+flags, explicit login and Ollama-only cases remain covered. The first full run
+stalled in an existing loopback fixture under the outer tool sandbox; it was stopped
+and the same gate passed outside that sandbox with inference disabled and unchanged
+application isolation controls. No real account, metadata, research or inference ran.
+
+Overall48.33% and P6 80% unchanged; empirical E5, deferred PKG/enterprise and other
+unestimated proposals remain open. No dependency, login transport, session/export
+schema, benchmark roster or active discussion semantics change.
+
 ### Per-participant reasoning selection — 2026-11-06 UTC (offline)
 
 Participant cards now expose Reasoning effort. Fresh OpenAI/Claude selections default
