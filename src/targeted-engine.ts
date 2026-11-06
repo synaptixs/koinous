@@ -1,3 +1,4 @@
+import {participantEffort} from './reasoning.ts';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import type {Adapter,Session,Round} from './core.ts';
@@ -33,7 +34,7 @@ export async function runTargeted(s:Session,factory:AdapterFactory,emit:(s:Sessi
    s.cancel.signal.throwIfAborted();emit(s,'round.started',{round,stage,agents:[agent]});s.calls++;dispatched=true;emit(s,'agent.started',{agent,round,stage,call:s.calls});
    const reply=await withDeadline(signal=>adapter.run(prompt,round,signal),s.cancel.signal,callTimeoutMs(providerFor(agent)));
    reconcile(reply.usage);
-   const entry={...reply,agent,round,stage,durationMs:Math.round(performance.now()-callStart)};s.entries.push(entry);
+   const entry={...reply,requestedEffort:participantEffort(s.selection,agent,stage==='review'?'medium':'low'),agent,round,stage,durationMs:Math.round(performance.now()-callStart)};s.entries.push(entry);
    const usd=cost(reply.usage?.usd);if(usd===undefined)s.spendIncomplete=true;else s.spendKnownUSD+=usd;
    emit(s,'agent.completed',{...entry,spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete});
    if(ledger.snapshot().breached)throw new ProviderFailure('budget_denied','Token ceiling breached; no further dispatch');

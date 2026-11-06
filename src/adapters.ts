@@ -9,6 +9,7 @@ import {subscriptionEnvironment} from './provider-config.ts';
 import type {Selection} from './selection.ts';
 import {resolveSelection,defaultParticipants} from './selection.ts';
 import {codexUsage} from './codex-usage.ts';
+import {REASONING_LEVELS} from './reasoning.ts';
 import type {Adapter, AgentId, Reply, Round, Usage} from './core.ts';
 
 // Mock mode uses deterministic stand-ins, NOT AI model outputs. No external packages required.
@@ -47,7 +48,7 @@ type ClaudeQuery = (params: {prompt: string; options: Options}) => AsyncIterable
 
 export function codexReasoningEffort(value:unknown):ModelReasoningEffort|undefined {
   if(value===undefined)return;
-  if(typeof value!=='string'||!['minimal','low','medium','high','xhigh','max','ultra','persistent'].includes(value))throw new ProviderFailure('configuration','Unsupported Codex reasoning effort');
+  if(typeof value!=='string'||!REASONING_LEVELS.codex.includes(value))throw new ProviderFailure('configuration','Unsupported Codex reasoning effort');
   return value as ModelReasoningEffort;
 }
 
@@ -89,8 +90,8 @@ export function claudeUsage(models: Record<string, ModelUsage>, usd: unknown): U
     reasoningTokens: sum('thinkingTokens'), usd: cost(usd) ?? null, costSource: 'provider-estimate'};
 }
 
-export type ClaudeEffort='low'|'medium'|'high';
-export function claudeReasoningEffort(value:unknown):ClaudeEffort|undefined {if(value===undefined)return;if(value!=='low'&&value!=='medium'&&value!=='high')throw new ProviderFailure('configuration','Unsupported Claude reasoning effort');return value;}
+export type ClaudeEffort=NonNullable<Options['effort']>;
+export function claudeReasoningEffort(value:unknown):ClaudeEffort|undefined {if(value===undefined)return;if(typeof value!=='string'||!REASONING_LEVELS.claude.includes(value))throw new ProviderFailure('configuration','Unsupported Claude reasoning effort');return value as ClaudeEffort;}
 export class ClaudeAdapter implements Adapter {
   private context?:ReturnType<typeof decisionContext>;
   private decisionOnly:boolean;
@@ -173,10 +174,10 @@ export class GrokAdapter implements Adapter {
     return {text: content, ...details};
   }
 }
-export function createAdapters(mode: string, providers: readonly ParticipantId[] = defaultParticipants(), models?: Selection['models'], reasoningEffort?:ModelReasoningEffort, claudeEffort?:ClaudeEffort, decisionOnly=false): Adapter[] {
+export function createAdapters(mode: string, providers: readonly ParticipantId[] = defaultParticipants(), models?: Selection['models'], reasoningEffort?:ModelReasoningEffort, claudeEffort?:ClaudeEffort, decisionOnly=false,efforts?:Selection['efforts']): Adapter[] {
   const effort=codexReasoningEffort(reasoningEffort),anthropicEffort=claudeReasoningEffort(claudeEffort);
   const roster = validateParticipants(providers);
-  const selection = models === undefined ? resolveSelection({providers: roster}) : resolveSelection({providers: roster, models}, {providers: roster, models});
+  const selection = models === undefined ? resolveSelection({providers: roster,...(efforts?{efforts}:{})}) : resolveSelection({providers: roster, models,...(efforts?{efforts}:{})}, {providers: roster, models});
   if (!['mock', 'real'].includes(mode)) throw new ProviderFailure('configuration', 'MODE must be mock or real');
   if (mode === 'real' && roster.includes('grok') && (process.env.GROK_TRANSPORT || 'build') !== 'build') {
     throw new ProviderFailure('configuration', 'Subscription mode requires GROK_TRANSPORT=build; API-key fallback is disabled');
@@ -186,7 +187,8 @@ export function createAdapters(mode: string, providers: readonly ParticipantId[]
     const provider=providerFor(id);
     // One fresh SDK adapter (and therefore conversation) per participant. Only
     // authentication is shared; each call retains its own selected model/usage.
-    const adapter:Adapter=isOllama(provider)?new OllamaAdapter(provider,selection.models[id]!):provider==='codex'?new CodexAdapter(undefined,selection.models[id],effort,decisionOnly):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id],anthropicEffort,decisionOnly):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
+    const own=selection.efforts&&Object.hasOwn(selection.efforts,id),chosen=selection.efforts?.[id];
+    const adapter:Adapter=isOllama(provider)?new OllamaAdapter(provider,selection.models[id]!,undefined,undefined,chosen):provider==='codex'?new CodexAdapter(undefined,selection.models[id],own?codexReasoningEffort(chosen??undefined):effort,decisionOnly):provider==='claude'?new ClaudeAdapter(undefined,selection.models[id],own?claudeReasoningEffort(chosen??undefined):anthropicEffort,decisionOnly):((process.env.GROK_BUILD_RUNTIME||'managed-vm')==='managed-vm'?new ManagedGrokBuildAdapter(selection.models[id]):new GrokBuildAdapter(selection.models[id]));
     if(id===provider)return adapter;
     return {id,maxTotalTokensPerCall:adapter.maxTotalTokensPerCall,run:adapter.run.bind(adapter),...(adapter.prepare?{prepare:adapter.prepare.bind(adapter)}:{}),...(adapter.dispose?{dispose:adapter.dispose.bind(adapter)}:{})};
   });

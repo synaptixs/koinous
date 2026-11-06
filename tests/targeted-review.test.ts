@@ -151,3 +151,11 @@ test('configured evidence is pinned across restart even after its source file ch
  const s=engine.create('Task',3,selection,{workflowMode:'targeted',author:'claude',grounding:'configured'});await engine.run(s);assert.equal(s.status,'completed');
  writeFileSync(file,'Changed source, no longer JSON.');const restored=new SavedSessions(dir).load(s.id)!;assert.deepEqual(restored.evidence,s.evidence);assert.equal(restored.evidence?.items[0].text,'Original source facts.');
 });
+
+test('explicit per-participant efforts survive API dispatch, author revision, saved restore and exports',async t=>{
+ const configured={...selection,efforts:{claude:'high',codex:'max'}};const calls:Array<unknown>=[];
+ const dir=root(t);const app=createApplication({mode:'mock',outputDir:dir,adapterFactory:(_m,ids,_models,_effort,_claudeEffort,_decisionOnly,efforts)=>{calls.push(efforts);return (ids??[]).map(id=>({id,async run(_prompt,round){return {text:JSON.stringify([draft,review,{draft:fixed,responses:[response]}][round-1]),usage:{inputTokens:1,outputTokens:1}};}}));}});
+ const req=Object.assign(Readable.from([JSON.stringify({prompt:'Cache policy',selection:configured,workflowMode:'targeted',author:'claude'})]),{url:'/api/sessions',method:'POST',headers:{}});let status=0;
+ await app.handler(req as unknown as IncomingMessage,{writeHead(code:number){status=code;},end(){}} as unknown as ServerResponse);await new Promise(resolve=>setImmediate(resolve));assert.equal(status,201);assert.ok(calls.length>=4);assert.ok(calls.every(value=>JSON.stringify(value)===JSON.stringify(configured.efforts)));
+ const s=[...app.engine.sessions.values()][0];assert.deepEqual(s.entries.map(e=>e.requestedEffort),['high','max','high']);assert.match(s.report!,/Author: claude \(high effort\).*Reviewer: codex \(max effort\)/);const reopened=new SavedSessions(dir).load(s.id)!;assert.deepEqual(reopened.selection?.efforts,configured.efforts);assert.deepEqual(reopened.entries.map(e=>e.requestedEffort),['high','max','high']);await app.shutdown();
+});

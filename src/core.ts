@@ -1,3 +1,5 @@
+import {effortLabel} from './reasoning.ts';
+import type {ReasoningEffort} from './reasoning.ts';
 import {tokenAccountingMarkdown} from './token-accounting.ts';
 import type {ModelAccounting} from './token-accounting.ts';
 import {targetedMarkdown} from './targeted-review.ts';
@@ -28,7 +30,7 @@ export type Usage = {inputTokens?: number; outputTokens?: number; cacheReadToken
 export type Evidence = {research?:ResearchMetadata;snapshotId: string; hash: string; items: Array<{id: string; uri: string; text: string;title?:string;researchSource?:'wikipedia'|'web'; provenance?:Provenance & {commit_sha:string;pipeline_id:string}}>; source: 'file' | 'mcp' | 'web'; publication?:{manifestSha256:string;repository:string;commitSha:string;pipelineId:string;indexes:string[];total:number;returned:number;truncated:boolean}};
 export type Event = {seq: number; at: string; type: string; [key: string]: unknown};
 export type Session = {workflowMode?:'discussion'|'targeted';targetedConfig?:TargetedConfig;targeted?:TargetedAssessment;readonly research?:Readonly<ResearchRequest>;readonly budgetPolicy?:BudgetPolicy;budget?:BudgetState;id: string; prompt: string; readonly context?:string; readonly grounding?:'none'|'configured'; outcome?:Outcome; status: string; maxRounds: number; participants?: ParticipantId[]; readonly selection?: Selection; events: Event[]; entries: Entry[]; interventions: string[]; calls: number; spendKnownUSD: number; spendIncomplete: boolean; evidence?: Evidence; report?: string; cancel: AbortController};
-export type Reply = {accounting?:ModelAccounting;grokDiagnostics?:GrokDiagnostics;protocolTiming?:GrokProtocolTiming;text: string; usage?: Usage; model?: string; requestedModel?: string; responseId?: string; sessionId?: string};
+export type Reply = {requestedEffort?:ReasoningEffort;accounting?:ModelAccounting;grokDiagnostics?:GrokDiagnostics;protocolTiming?:GrokProtocolTiming;text: string; usage?: Usage; model?: string; requestedModel?: string; responseId?: string; sessionId?: string};
 export interface Adapter { id: ParticipantId; readonly maxTotalTokensPerCall?:number; prepare?(signal: AbortSignal): Promise<void>; dispose?(): Promise<void>; run(prompt: string, round: Round, signal: AbortSignal): Promise<Reply> }
 
 export function composePrompt(s: Session, agent: ParticipantId, round: Round, context: string): string {
@@ -128,9 +130,9 @@ export function makeReport(s: Session, options:{preserveRecordedOutcome?:boolean
   '## Task','',reportCell(s.prompt),'','## Supplied context','',reportCell(s.context||'None'),'',
   '## Acceptance checks','',...(s.targetedConfig?.checks.length?s.targetedConfig.checks.map(c=>'- '+reportCell(c)):['None supplied.']),'',
   '## Research','',s.research?reportCell(s.evidence?.research?.scope||researchScope(s.research)):'No external research requested.','',...researchCoverageMarkdown(s.evidence?.research),'',
-  '## Requested participants and models','',...(s.selection?.providers.map(id=>`- ${id}: ${reportCell(s.selection!.models[id]||'SDK default')}`)??[]),'',
+  '## Requested participants and models','',...(s.selection?.providers.map(id=>`- ${id}: ${reportCell(s.selection!.models[id]||'SDK default')} · requested effort: ${reportCell(effortLabel(s.selection!.efforts?.[id]))}`)??[]),'',
   '## Evidence','',s.evidence?originalMarkdown(JSON.stringify(s.evidence,null,2)):'No external evidence supplied.','',
-  ...(s.targeted?targetedMarkdown(s.targeted):['Assessment unavailable']),...tokenAccountingMarkdown(s.events),...budgetMarkdown(s.budget),
+  ...(s.targeted?targetedMarkdown(s.targeted,s.selection):['Assessment unavailable']),...tokenAccountingMarkdown(s.events),...budgetMarkdown(s.budget),
   '## Failures and stop reasons','',...s.events.filter(e=>['agent.error','discussion.stopped','session.error'].includes(e.type)).map(e=>reportCell(e.error??e.reason)),'',
   '## Original responses','',...s.entries.flatMap(e=>[`### ${e.stage} — ${e.agent}`,'',originalMarkdown(e.text),''])].join('\n');
  const lines=[`# Multi-agent discussion — ${s.id}`, '', `**Question:** ${s.prompt.replace(/\n/g,' ')}`, `**Status:** ${s.status}  **Calls:** ${s.calls}  **Cost known:** $${s.spendKnownUSD.toFixed(4)}${s.spendIncomplete?' (incomplete metering)':''}`, `**Evidence:** ${s.evidence?.snapshotId || 'none'}  **SHA-256:** ${s.evidence?.hash || 'not available'}`,''];
@@ -142,8 +144,8 @@ export function makeReport(s: Session, options:{preserveRecordedOutcome?:boolean
  lines.push(...tokenAccountingMarkdown(s.events));
  if(s.context)lines.push('## Supplied context','',reportCell(s.context),'');
  if(s.selection) {
-  lines.push('## Requested providers and models', '', '| Participant | Requested model |', '|---|---|');
-  for(const id of s.selection.providers)lines.push(`| ${id} | ${reportCell(s.selection.models[id] || 'SDK default')} |`);
+  lines.push('## Requested providers and models', '', '| Participant | Requested model | Requested reasoning |', '|---|---|---|');
+  for(const id of s.selection.providers)lines.push(`| ${id} | ${reportCell(s.selection.models[id] || 'SDK default')} | ${reportCell(effortLabel(s.selection.efforts?.[id]))} |`);
   lines.push('', 'Requested models are configuration, not confirmation of the model used. Provider-reported model IDs remain in the events.', '');
  }
  const lifecycle=s.events.filter(e=>e.type.startsWith('runtime.'));

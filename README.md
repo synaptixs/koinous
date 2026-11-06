@@ -141,7 +141,8 @@ See [Ollama's authentication guide](https://docs.ollama.com/api/authentication).
 
 Refresh lists only models registered with your daemon; it does not download models,
 check Cloud quota or send an inference prompt. synqo verifies Local/Cloud metadata
-before a chat. Ollama uses **model default effort**, which may differ across models.
+before a chat. Use **Load reasoning choices** for model-reported effort/on/off controls;
+without a choice, Ollama uses its model default.
 Token counts and latency appear in the existing UI and exports; missing usage and
 USD remain unknown. No Ollama live acceptance run has been performed.
 See [Ollama setup and troubleshooting](DEMO.md#ollama-cloud--local).
@@ -184,6 +185,36 @@ appears in the browser or model SDK environment. It authenticates the separate
 search service, not a model provider; its usage/charges are separate from the
 model token accounting. See [research setup](DEMO.md#optional-research).
 
+### Choose reasoning effort
+
+Every participant card has **Reasoning effort**. New OpenAI/Claude selections start
+at **Medium**; choose Low, High or other levels supported by the pinned transport.
+Loaded catalogs narrow choices to model-reported levels when available. Explicit
+custom model IDs use the SDK’s supported set with model support marked unverified.
+A selected level that disappears stays visible and blocks Start until changed;
+it is not silently replaced. **Model default** explicitly leaves effort to the provider.
+
+- **OpenAI Codex:** the pinned SDK accepts minimal, low, medium, high, xhigh, max,
+  ultra and persistent; individual model catalogs may expose fewer.
+- **Claude:** low, medium, high, xhigh and max, subject to model/account support.
+- **Ollama Cloud/Local:** after choosing a model, click **Load reasoning choices**.
+  This reads `/api/show` metadata, not a chat. Medium is selected when reported;
+  otherwise Model default remains. Available named levels or Thinking on/off are
+  shown exactly as reported. Missing metadata does not establish effort support.
+- **Grok Build:** this transport currently exposes Model default only.
+
+Reasoning choices apply in both workflows; an author’s choice is reused for its
+conditional revision. The Start summary, flow and saved setup show requested levels.
+Saved selection/entries and Markdown/JSON retain them. They are requests, not proof
+of the provider’s effective setting, model access, quota, quality or cost. Higher
+levels do not override the existing call/token/time bounds. Old sessions without
+recorded effort retain legacy labels/settings; a fresh follow-up defaults to medium
+where supported rather than rewriting its source. Model selection remains explicit.
+
+Provider contracts: [OpenAI model catalog](https://learn.chatgpt.com/docs/app-server),
+[Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort),
+[Ollama thinking metadata](https://docs.ollama.com/capabilities/thinking).
+
 ### Human feedback during or after a discussion
 
 Human input is **optional**; models continue without waiting for it. Add a correction,
@@ -213,9 +244,9 @@ Unsent feedback and prepared setup drafts remain only in the open page.
 ## How it works
 
 **Draft + targeted review is the UI default.** Select exactly two OpenAI, Claude or
-Ollama participants and choose the author. OpenAI/Claude authors use low effort and
-reviewers medium; Ollama uses model default effort. The preset selects Sonnet 5.5
-and Astra. Model availability depends on the provider and your account/local setup.
+Ollama participants and choose the author. New OpenAI/Claude participants default to
+**medium** reasoning; change each participant independently. Revision uses the
+author’s selected level. The preset selects Sonnet 5.5 and Astra, both at medium. Model availability depends on the provider and your account/local setup.
 Optional acceptance checks define what a sound answer
 must get right.
 

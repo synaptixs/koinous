@@ -8,19 +8,22 @@ import {StringDecoder} from 'node:string_decoder';
 import {authCommand} from './subscription-setup.ts';
 import {subscriptionEnvironment} from './provider-config.ts';
 import {SDK_PINS} from './sdk-execution.ts';
+import {REASONING_LEVELS} from './reasoning.ts';
 export type CatalogProvider='codex'|'claude';
-export type ModelCatalog={provider:string;models:string[];labels:Record<string,string>;total:number|null;truncated:boolean;omitted:number;source:string;availabilityVerified:false;inferencePerformed:false};
+export type ModelCatalog={provider:string;models:string[];labels:Record<string,string>;efforts?:Record<string,string[]>;total:number|null;truncated:boolean;omitted:number;source:string;availabilityVerified:false;inferencePerformed:false};
 const valid=(value:unknown):value is string=>typeof value==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/.test(value)&&!['default','auto'].includes(value.toLowerCase());
 export function normalizeCatalog(provider:CatalogProvider,rows:unknown,more=false):ModelCatalog {
  if(!Array.isArray(rows))throw Error('Invalid model catalog');
- const ids:string[]=[],labels:Record<string,string>={};let omitted=0;
+ const ids:string[]=[],labels:Record<string,string>={},efforts:Record<string,string[]>={};let omitted=0;
  for(const row of rows){
   if(!row||typeof row!=='object'){omitted++;continue;}
   const id=provider==='codex'?(row.model??row.id):(['default','auto'].includes(String(row.value).toLowerCase())?null:row.resolvedModel??row.value);
   if(!valid(id)){omitted++;continue;}if(ids.includes(id))continue;
   ids.push(id);if(ids.length<=200)labels[id]=typeof row.displayName==='string'?row.displayName.slice(0,160):id;
+  const levels=provider==='codex'?row.supportedReasoningEfforts:row.supportedEffortLevels;
+  if(ids.length<=200&&(Array.isArray(levels)||row.supportsEffort===false))efforts[id]=row.supportsEffort===false?[]:[...new Set((levels as unknown[]).map(value=>provider==='codex'&&value&&typeof value==='object'?(value as {reasoningEffort?:unknown}).reasoningEffort:value).filter((value):value is string=>typeof value==='string'&&REASONING_LEVELS[provider].includes(value)))];
  }
- return {provider,models:ids.slice(0,200),labels,total:more?null:ids.length,truncated:more||ids.length>200,omitted,source:provider+'-cli-catalog',availabilityVerified:false,inferencePerformed:false};
+ return {provider,models:ids.slice(0,200),labels,...(Object.keys(efforts).length?{efforts}:{}),total:more?null:ids.length,truncated:more||ids.length>200,omitted,source:provider+'-cli-catalog',availabilityVerified:false,inferencePerformed:false};
 }
 export function catalogCommand(provider:CatalogProvider){
  const root=fileURLToPath(new URL('../node_modules/',import.meta.url));

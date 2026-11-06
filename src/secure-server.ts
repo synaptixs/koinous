@@ -39,7 +39,7 @@ export function createProtectedApplication(options:Options){
  const apps=new Map<string,ReturnType<typeof createApplication>>();
  try{for(const tenant of tenants){
   const outputDir=join(root,'tenants',tenant);privateDirectory(outputDir);
-  apps.set(tenant,createApplication({mode,port,outputDir,adapterFactory:(m,ids,models,effort,claudeEffort,decisionOnly)=>(options.adapterFactory??createAdapters)(m,ids,models,effort,claudeEffort,decisionOnly).map(a=>guardedAdapter(a,()=>audit.record({tenant,action:'provider.content',decision:'deny',reason:'dlp'})))}));
+  apps.set(tenant,createApplication({mode,port,outputDir,adapterFactory:(m,ids,models,effort,claudeEffort,decisionOnly,efforts)=>(options.adapterFactory??createAdapters)(m,ids,models,effort,claudeEffort,decisionOnly,efforts).map(a=>guardedAdapter(a,()=>audit.record({tenant,action:'provider.content',decision:'deny',reason:'dlp'})))}));
  }}catch(e){unlock();throw e;}
  let stopping=false,closing:Promise<void>|undefined;
  const json=(res:ServerResponse,status:number,error:string)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify({error}));};

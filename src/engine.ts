@@ -1,3 +1,4 @@
+import {participantEffort} from './reasoning.ts';
 import {runTargeted} from './targeted-engine.ts';
 import type {AdapterFactory} from './targeted-engine.ts';
 import {tokenAccounting} from './token-accounting.ts';
@@ -137,12 +138,13 @@ export class Engine extends EventEmitter {
             const durationMs = Math.round(performance.now() - started);
             const validation=responseValidation({round,text:result.text});
             const position=round===3?parsePosition(result.text):undefined;
-            s.entries.push({round,agent:adapter.id,...result,durationMs,...(validation?{validation}:{}),...(round===3?{position}: {})});
+            const requestedEffort=participantEffort(s.selection,adapter.id);
+            s.entries.push({round,agent:adapter.id,...result,requestedEffort,durationMs,...(validation?{validation}:{}),...(round===3?{position}: {})});
             if(validation)this.emitEvent(s,'response.validated',{agent:adapter.id,round,validation});
             if(round===3&&!position)this.emitEvent(s,'position.invalid',{agent:adapter.id,reason:'Final response did not match the position schema; reply and usage retained',validation});
             if(cost(result.usage?.usd)!==undefined)s.spendKnownUSD+=result.usage!.usd!;
             else s.spendIncomplete=true;
-            this.emitEvent(s,'agent.completed',{round,agent:adapter.id,...result,durationMs,...(validation?{validation}:{}),...(round===3?{position}:{}),spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete});
+            this.emitEvent(s,'agent.completed',{round,agent:adapter.id,...result,requestedEffort,durationMs,...(validation?{validation}:{}),...(round===3?{position}:{}),spendKnownUSD:s.spendKnownUSD,spendIncomplete:s.spendIncomplete});
           }catch(e){
             const details = e instanceof ProviderFailure ? e.details : {};
             reconcile(details.usage);

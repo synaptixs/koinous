@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {REASONING_LEVELS} from '../src/reasoning.ts';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
@@ -29,7 +30,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
     constructor(_url:string){streams.push(this);}close(){this.closed=true;}
   }
   const fetch=async(url:string,options?:{body?:string})=>{
-    if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}],...healthOverride})};
+    if(url==='/api/health')return {ok:!failedHealth,json:async()=>({mode:real?'real':'mock',inferenceEnabled:false,reasoningLevels:REASONING_LEVELS,agents:['codex','claude'],availableProviders:[{id:'codex',label:'OpenAI Codex',defaultModel:'codex-default'},{id:'claude',label:'Anthropic Claude',defaultModel:''},{id:'grok',label:'Grok Build',defaultModel:'grok-4.7'}],...healthOverride})};
     if(url.startsWith('/api/models?')){modelRequests.push(url);if(modelFetch)return modelFetch(url);const provider=new URLSearchParams(url.split('?')[1]).get('provider');return {ok:true,json:async()=>({provider,models:provider==='codex'?['codex-default','codex-second']:['claude-fixture','claude-second'],labels:{},total:2,truncated:false,source:'test-catalog',availabilityVerified:false,inferencePerformed:false})};}
     if(url.startsWith('/api/sessions?')&&!options){historyRequests.push(url);if(historyFetch)return historyFetch(url);return {ok:true,json:async()=>({sessions:saved?[{id:saved.id,prompt:saved.prompt,status:saved.status,createdAt:'2026-11-01'}]:[],total:saved?1:0,discoveredTotal:saved?1:0,unavailable:0,truncated:false,scanTruncated:false,page:1,pageSize:50,totalPages:1,q:'',hasPrevious:false,hasNext:false})};}
     if(url==='/api/sessions/'+(saved?.id||'saved-id')&&!options)return {ok:true,json:async()=>saved};
@@ -40,7 +41,7 @@ async function setup(failedHealth=false,failedPost=false,saved?:Record<string,an
   const urlGlobals=address?{location:address,history:{replaceState(_state:unknown,_title:string,path:string){address.href=new URL(path,address).href;urlWrites.push(address.href);}}}:{};
   runInNewContext(readFileSync(new URL('../public/app.js',import.meta.url),'utf8'),{document:{getElementById:(id:string)=>elements[id],createElement:(tag:string)=>Object.assign(new Element(),{tagName:tag}),createTextNode:(text:string)=>Object.assign(new Element(),{textContent:text})},fetch,EventSource:FakeEvents,URLSearchParams,...urlGlobals});
   await new Promise(resolve=>setImmediate(resolve));
-  const ui={elements,get rows(){return elements.participantChoices.children.map(card=>{const discovery=card.children.find(c=>c.className==='model-discovery')!,cloudHelp=discovery.children.find(c=>c.tagName==='details')!;return {card,title:card.children.find(c=>c.tagName==='h3')!,role:card.children.find(c=>c.className==='participant-role')!,provider:card.children.find(c=>c.tagName==='select')!,model:card.children.find(c=>c.tagName==='input')!,discovery,picker:discovery.children.find(c=>c.tagName==='select')!,refreshModels:discovery.children.find(c=>c.tagName==='button')!,modelStatus:discovery.children.find(c=>c.tagName==='small')!,cloudHelp,cloudHint:cloudHelp.children[1],commands:cloudHelp.children[2],customButton:card.children.find(c=>c.tagName==='button')!};});},requests,streams,historyRequests,modelRequests,address,urlWrites};
+  const ui={elements,get rows(){return elements.participantChoices.children.map(card=>{const discovery=card.children.find(c=>c.className==='model-discovery')!,cloudHelp=discovery.children.find(c=>c.tagName==='details')!,reasoning=card.children.find(c=>c.className==='reasoning-control')!;return {card,effort:reasoning.children.find(c=>c.tagName==='select')!,loadReasoning:reasoning.children.find(c=>c.tagName==='button')!,effortStatus:reasoning.children.find(c=>c.tagName==='small')!,title:card.children.find(c=>c.tagName==='h3')!,role:card.children.find(c=>c.className==='participant-role')!,provider:card.children.find(c=>c.tagName==='select')!,model:card.children.find(c=>c.tagName==='input')!,discovery,picker:discovery.children.find(c=>c.tagName==='select')!,refreshModels:discovery.children.find(c=>c.tagName==='button')!,modelStatus:discovery.children.find(c=>c.tagName==='small')!,cloudHelp,cloudHint:cloudHelp.children[1],commands:cloudHelp.children[2],customButton:card.children.find(c=>c.tagName==='button')!};});},requests,streams,historyRequests,modelRequests,address,urlWrites};
   // Unrelated interaction tests explicitly enter synthetic user choices. Dedicated
   // picker tests disable this fixture action to inspect the real blank initial UI.
   if(fixtureChoices&&new Set(ui.rows.map(row=>row.provider.value)).size===ui.rows.length)for(const row of ui.rows)if(['codex','claude'].includes(row.provider.value)){await row.customButton.onclick!();row.model.value=row.provider.value==='codex'?'codex-default':'claude-fixture';row.model.oninput!();}
@@ -66,7 +67,7 @@ test('switching provider clears the model and shares catalog choices across same
  ui.rows[0].model.value='old-choice';ui.rows[0].model.oninput!();ui.rows[0].provider.value='claude';ui.rows[0].provider.onchange!();assert.equal(ui.rows[0].model.value,'');
  await ui.rows[0].refreshModels.onclick!();assert.ok(ui.rows.every(row=>row.picker.children.some(option=>option.value==='claude-second')));assert.ok(ui.rows.every(row=>row.model.value===''));
  ui.rows[0].picker.value='claude-fixture';ui.rows[0].picker.onchange!();ui.rows[1].picker.value='claude-second';ui.rows[1].picker.onchange!();
- await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['claude-2','claude'],models:{'claude-2':'claude-fixture',claude:'claude-second'}});
+ await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['claude-2','claude'],models:{'claude-2':'claude-fixture',claude:'claude-second'},efforts:{'claude-2':'medium','claude':'medium'}});
 });
 test('failed model discovery leaves choices empty and custom model entry is an explicit user action',async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,{},async()=>({ok:false,json:async()=>({error:'Catalog unavailable'})}),false);
@@ -107,7 +108,7 @@ test('invalid daemon configuration offers browse links but no misleading registr
 test('workflow preview separates draft, review and conditional revision with attributed models',async()=>{
  const ui=await setup(),e=ui.elements;await e.usePair.onclick!();
  const steps=e.workflowSteps.children;assert.equal(steps.length,3);
- assert.match(steps[0].textContent,/Draft.*Anthropic Claude.*claude-sonnet-5-5.*low effort/);
+ assert.match(steps[0].textContent,/Draft.*Anthropic Claude.*claude-sonnet-5-5.*medium effort/);
  assert.match(steps[1].textContent,/Targeted review.*OpenAI Codex.*gpt-6-astra.*medium effort/);
  assert.match(steps[2].textContent,/Revision if needed.*If needed.*claude-sonnet-5-5/);
  assert.ok(steps.every(step=>!step.className.includes('is-active')));assert.match(e.workflowProgress.textContent,/Planned flow/);
@@ -158,7 +159,7 @@ test('choosing three explicitly selects full discussion and requires configuring
  assert.deepEqual(ui.rows.slice(0,2).map(row=>({provider:row.provider.value,model:row.model.value})),first);assert.equal(ui.requests.length,0);assert.equal(ui.modelRequests.length,0);
  e.participantCount.value='2';e.participantCount.onchange!();assert.equal(ui.rows.length,2);assert.equal(e.workflowMode.value,'discussion');assert.equal(e.author.value,author);assert.deepEqual(ui.rows.map(row=>({provider:row.provider.value,model:row.model.value})),first);
  e.participantCount.value='3';e.participantCount.onchange!();const third=ui.rows[2];third.provider.value='claude';third.provider.onchange!();third.model.value='explicit-third';third.model.oninput!();assert.equal(e.plannedCalls.textContent,9);await e.run.onclick!();
- assert.deepEqual(ui.requests[0].selection,{providers:['codex','claude','claude-2'],models:{codex:'codex-default',claude:'claude-fixture','claude-2':'explicit-third'}});assert.equal(e.participantCount.disabled,true);e.participantCount.value='2';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.participantCount.value,'3');
+ assert.deepEqual(ui.requests[0].selection,{providers:['codex','claude','claude-2'],models:{codex:'codex-default',claude:'claude-fixture','claude-2':'explicit-third'},efforts:{'codex':'medium','claude':'medium','claude-2':'medium'}});assert.equal(e.participantCount.disabled,true);e.participantCount.value='2';e.participantCount.onchange!();assert.equal(ui.rows.length,3);assert.equal(e.participantCount.value,'3');
 });
 test('saved three-participant sessions restore their count and models; the explicit pair preset resets the count to two',async()=>{
  const saved={id:'saved-id',prompt:'Three saved participants',status:'completed',readOnly:true,maxRounds:3,calls:3,spendKnownUSD:0,entries:[],selection:{providers:['codex','claude','grok'],models:{codex:'old-codex',claude:'old-claude',grok:'old-grok'}}};
@@ -179,7 +180,7 @@ test('one participant list numbers rows globally and offers Ollama in the same p
  }
  ui.rows[1].provider.value='ollama-cloud';ui.rows[1].provider.onchange!();ui.rows[1].model.value='cloud:model';ui.rows[0].model.value='astra';ui.rows[0].model.oninput!();
  assert.equal(ui.rows.length,2);assert.equal(ui.rows[1].discovery.hidden,false);
- await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['codex','ollama-cloud'],models:{codex:'astra','ollama-cloud':'cloud:model'}});
+ await ui.elements.run.onclick!();assert.deepEqual(ui.requests[0].selection,{providers:['codex','ollama-cloud'],models:{codex:'astra','ollama-cloud':'cloud:model'},efforts:{'codex':'medium'}});
 });
 test('count changes preserve the first two identities, explicit models and draft author',async()=>{
  const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth),e=ui.elements;
@@ -191,7 +192,7 @@ test('count changes preserve the first two identities, explicit models and draft
  e.participantCount.value='2';e.participantCount.onchange!();e.workflowMode.value='targeted';e.workflowMode.onchange!();
  assert.equal(ui.rows.length,2);assert.equal(ui.rows[0].title.textContent,'Participant 1');assert.equal(ui.rows[1].title.textContent,'Participant 2');assert.equal(e.author.value,'codex-2');
  assert.equal(ui.rows[0].model.value,'model-a');assert.equal(ui.rows[1].model.value,'model-b');assert.match(e.author.children[1].textContent,/Participant 2 · OpenAI Codex · model-b/);
- await e.run.onclick!();assert.equal(ui.requests[0].author,'codex-2');assert.deepEqual(ui.requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}});
+ await e.run.onclick!();assert.equal(ui.requests[0].author,'codex-2');assert.deepEqual(ui.requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'},efforts:{'codex':'medium','codex-2':'medium'}});
 });
 test('disabled saved providers remain reviewable but cannot be dispatched or restored by the preset',async()=>{
  const saved={id:'saved-id',prompt:'Historical',maxRounds:3,status:'completed',readOnly:true,calls:2,spendKnownUSD:0,selection:{providers:['claude','claude-2'],models:{claude:'old-a','claude-2':'old-b'}},entries:[]};
@@ -301,7 +302,7 @@ test('UI hydrates only participating rows and requires a provider and valid mode
 test('UI sends only selected models, freezes running controls, handles completion and preserves user choices',async()=>{
  const ui=await setup();const {elements,rows,requests,streams}=ui;rows[0].model.value=' chosen-model ';
  await elements.run.onclick!();
- assert.deepEqual(requests[0].selection,{providers:['codex','claude'],models:{codex:'chosen-model',claude:'claude-fixture'}});
+ assert.deepEqual(requests[0].selection,{providers:['codex','claude'],models:{codex:'chosen-model',claude:'claude-fixture'},efforts:{'codex':'medium','claude':'medium'}});
  assert.equal(elements.run.disabled,true);assert.ok(rows.every(row=>row.provider.disabled&&row.model.disabled));assert.equal(elements.participantCount.disabled,true);assert.equal(elements.navSaved.disabled,true);
  await elements.run.onclick!();assert.equal(requests.length,1);
  streams[0].onmessage!({data:JSON.stringify({type:'session.finished',status:'completed',spendKnownUSD:0.01,spendIncomplete:true})});
@@ -554,7 +555,7 @@ test('OpenAI-only UI requires two distinct models, posts both slots and reopens 
  assert.equal(rows.length,2);assert.equal(elements.run.disabled,true);assert.match(elements.selectionError.textContent,/Choose a model/);
  rows[0].model.value='model-a';rows[1].model.value='model-a';rows[1].model.oninput!();assert.equal(elements.run.disabled,true);
  rows[1].model.value='model-b';rows[1].model.oninput!();assert.equal(elements.run.disabled,false);assert.equal(elements.plannedCalls.textContent,6);
- await elements.run.onclick!();assert.deepEqual(requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'}});
+ await elements.run.onclick!();assert.deepEqual(requests[0].selection,{providers:['codex','codex-2'],models:{codex:'model-a','codex-2':'model-b'},efforts:{'codex':'medium','codex-2':'medium'}});
  const saved={id:'saved-id',prompt:'Saved two-model idea',maxRounds:3,status:'completed',readOnly:true,calls:6,maxCalls:6,spendKnownUSD:0,spendIncomplete:true,selection:requests[0].selection,entries:[1,2,3].flatMap(round=>['codex','codex-2'].map(agent=>({round,agent,text:agent+' original '+round}))),outcome:null};
  const reopened=await setup(false,false,saved,true,undefined,undefined,health);reopened.elements.savedSessions.value='saved-id';await reopened.elements.openSaved.onclick!();
  assert.equal(reopened.requests.length,0);assert.equal(reopened.rows[1].model.value,'model-b');assert.match(reopened.elements.feed.textContent,/codex-2 original 3/);assert.equal(reopened.elements.run.disabled,true);
@@ -634,7 +635,7 @@ test('restored targeted draft starts with its own roles, criteria and public que
  await e.navSaved.onclick!();e.savedSessions.value='saved-id';await e.openSaved.onclick!();await e.navNew.onclick!();
  assert.equal(ui.rows[0].role.textContent,'Draft author');assert.equal(ui.rows[1].role.textContent,'Reviewer');assert.equal(e.run.disabled,false);
  await e.run.onclick!();assert.equal(e.sessionResults.hidden,false);assert.equal(e.navNew.disabled,true);assert.equal(e.navSaved.disabled,true);await e.navSaved.onclick!();assert.equal(e.historyWorkspace.hidden,true);
- assert.deepEqual(ui.requests[0],{url:'/api/sessions',prompt:'Current task',context:'Current context',grounding:'none',maxRounds:3,selection:{providers:['codex','claude'],models:{codex:'codex-default',claude:'claude-fixture'}},workflowMode:'targeted',author:'codex',checks:['A measurable outcome'],research:{mode:'wikipedia',query:'Public topic'}});
+ assert.deepEqual(ui.requests[0],{url:'/api/sessions',prompt:'Current task',context:'Current context',grounding:'none',maxRounds:3,selection:{providers:['codex','claude'],models:{codex:'codex-default',claude:'claude-fixture'},efforts:{'codex':'medium','claude':'medium'}},workflowMode:'targeted',author:'codex',checks:['A measurable outcome'],research:{mode:'wikipedia',query:'Public topic'}});
 });
 
 test('research query is revealed only when opted in, validated before Start and retained while off',async()=>{
@@ -695,4 +696,41 @@ test('follow-up missing historical facts stay explicit, and records that are no 
  const saved={id:'saved-id',prompt:'Legacy',status:'completed',readOnly:true,maxRounds:1,calls:0,spendKnownUSD:0,entries:[]};const ui=await setup(false,false,saved),e=ui.elements;e.savedSessions.value='saved-id';await e.openSaved.onclick!();
  e.intervene.value='Feedback';e.intervene.oninput!();saved.readOnly=false;await e.prepareFeedback.onclick!();assert.match(e.feedbackStatus.textContent,/Follow-up not prepared/);assert.equal(e.intervene.value,'Feedback');assert.equal(e.newWorkspace.hidden,true);assert.equal(ui.requests.length,0);
  saved.readOnly=true;await e.prepareFeedback.onclick!();assert.match(e.context.value,/No structured final assessment was recorded/);assert.ok(ui.rows.every(row=>row.provider.value===''&&row.model.value===''));assert.equal(e.run.disabled,true);assert.equal(ui.requests.length,0);assert.equal(ui.modelRequests.length,0);
+});
+
+test('new participants default to medium independently, dispatch changes and lock reasoning while running',async()=>{
+ const ui=await setup(),e=ui.elements;assert.ok(ui.rows.every(row=>row.effort.value==='medium'));assert.equal(ui.modelRequests.length,0);
+ ui.rows[0].effort.value='low';ui.rows[0].effort.onchange!();ui.rows[1].effort.value='high';ui.rows[1].effort.onchange!();e.workflowMode.value='targeted';e.workflowMode.onchange!();
+ assert.match(e.workflowSteps.children[0].textContent,/high effort/);assert.match(e.workflowSteps.children[1].textContent,/low effort/);assert.match(e.workflowSteps.children[2].textContent,/high effort/);
+ await e.run.onclick!();assert.deepEqual(ui.requests[0].selection.efforts,{codex:'low',claude:'high'});assert.ok(ui.rows.every(row=>row.effort.disabled));assert.equal(ui.modelRequests.length,0);
+});
+
+test('model-reported choices narrow reasoning without silently replacing an unsupported selected level',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,{},async()=>({ok:true,json:async()=>({models:['codex-default'],labels:{},efforts:{'codex-default':['medium']},total:1})}));
+ ui.rows[0].effort.value='high';ui.rows[0].effort.onchange!();await ui.rows[0].refreshModels.onclick!();assert.equal(ui.rows[0].effort.value,'high');assert.equal(ui.elements.run.disabled,true);assert.match(ui.rows[0].card.textContent,/unavailable; choose another/);await ui.elements.run.onclick!();assert.equal(ui.requests.length,0);
+ ui.rows[0].effort.value='@default';ui.rows[0].effort.onchange!();assert.equal(ui.elements.run.disabled,false);await ui.elements.run.onclick!();assert.equal(ui.requests[0].selection.efforts.codex,null);
+});
+
+test('explicit saved reasoning reopens without discovery, survives setup restoration and copies into follow-up',async()=>{
+ const saved={id:'saved-id',prompt:'Recorded',status:'completed',readOnly:true,maxRounds:3,calls:0,spendKnownUSD:0,workflowMode:'targeted',targetedConfig:{author:'claude',checks:[]},selection:{providers:['codex','claude'],models:{codex:'a',claude:'b'},efforts:{codex:'xhigh',claude:'max'}},entries:[]};const ui=await setup(false,false,saved),e=ui.elements;
+ ui.rows[0].effort.value='low';ui.rows[0].effort.onchange!();e.savedSessions.value='saved-id';await e.openSaved.onclick!();assert.equal(ui.rows[0].effort.value,'xhigh');assert.equal(ui.rows[1].effort.value,'max');assert.match(e.savedConfiguration.textContent,/Requested reasoning: codex · xhigh effort.*claude · max effort/);assert.equal(ui.modelRequests.length,0);
+ await e.navNew.onclick!();assert.equal(ui.rows[0].effort.value,'low');assert.equal(ui.rows[1].effort.value,'medium');await e.navSaved.onclick!();e.savedSessions.value='saved-id';await e.openSaved.onclick!();e.intervene.value='New constraint';e.intervene.oninput!();await e.prepareFeedback.onclick!();assert.equal(ui.rows[0].effort.value,'xhigh');assert.equal(ui.rows[1].effort.value,'max');assert.equal(ui.requests.length,0);assert.equal(ui.modelRequests.length,0);
+});
+
+test('legacy saved effort remains unrecorded rather than relabeled medium; fresh follow-up defaults to medium',async()=>{
+ const saved={id:'saved-id',prompt:'Legacy',status:'completed',readOnly:true,maxRounds:3,calls:0,spendKnownUSD:0,workflowMode:'targeted',targetedConfig:{author:'claude',checks:[]},selection:{providers:['codex','claude'],models:{codex:'a',claude:'b'}},entries:[]};const ui=await setup(false,false,saved),e=ui.elements;e.savedSessions.value='saved-id';await e.openSaved.onclick!();assert.ok(ui.rows.every(row=>row.effort.value==='@legacy'));assert.match(e.savedConfiguration.textContent,/not recorded \(legacy workflow settings\)/);assert.match(e.workflowSteps.children[0].textContent,/low effort \(legacy\)/);
+ e.intervene.value='New information';e.intervene.oninput!();await e.prepareFeedback.onclick!();assert.ok(ui.rows.every(row=>row.effort.value==='medium'));assert.equal(saved.selection.hasOwnProperty('efforts'),false);assert.equal(ui.modelRequests.length,0);
+});
+
+test('Ollama loads model-specific reasoning only on request, selects medium when supported, and sends booleans exactly',async()=>{
+ const ui=await setup(false,false,undefined,false,undefined,undefined,ollamaHealth,async url=>{const p=new URLSearchParams(url.split('?')[1]);return {ok:true,json:async()=>p.has('model')?{values:['low','medium','high',true,false]}:{models:[p.get('provider')==='ollama-local'?'local:a':'cloud:a'],total:1,source:'local-ollama-registry'}};}),e=ui.elements;
+ for(const [index,row] of ui.rows.entries()){await row.refreshModels.onclick!();row.picker.value=index?'cloud:a':'local:a';row.picker.onchange!();assert.equal(row.effort.value,'@default');}
+ assert.equal(ui.modelRequests.length,2);for(const row of ui.rows){await row.loadReasoning.onclick!();assert.equal(row.effort.value,'medium');}
+ assert.equal(ui.modelRequests.length,4);assert.equal(ui.requests.length,0);ui.rows[0].effort.value='@false';ui.rows[0].effort.onchange!();ui.rows[1].effort.value='high';ui.rows[1].effort.onchange!();await e.run.onclick!();assert.deepEqual(ui.requests[0].selection.efforts,{'ollama-local':false,'ollama-cloud':'high'});
+});
+
+test('pending reasoning blocks Start; late results do not overwrite a provider changed during metadata loading',async()=>{
+ let resolve!:(value:{ok:boolean;json:()=>Promise<any>})=>void;
+ const ui=await setup(false,false,undefined,false,undefined,undefined,mixedHealth,async()=>new Promise(r=>{resolve=r;})),row=ui.rows[0],e=ui.elements;row.provider.value='ollama-cloud';row.provider.onchange!();row.model.value='cloud:a';row.model.oninput!();const loading=row.loadReasoning.onclick!();assert.equal(e.run.disabled,true);assert.equal(e.setupState.textContent,'Loading model choices');await e.run.onclick!();assert.equal(ui.requests.length,0);
+ row.provider.value='codex';row.provider.onchange!();row.model.value='fresh-model';row.model.oninput!();row.effort.value='low';row.effort.onchange!();resolve({ok:true,json:async()=>({values:['medium','high']})});await loading;assert.equal(row.effort.value,'low');assert.equal(row.model.value,'fresh-model');assert.equal(e.run.disabled,false);assert.equal(ui.requests.length,0);
 });

@@ -3,7 +3,7 @@ import {ollamaCloudSetup} from './ollama-setup.ts';
 import {providerModelCatalog} from './model-catalog.ts';
 import type {CatalogProvider,ModelCatalog} from './model-catalog.ts';
 import {tokenAccounting} from './token-accounting.ts';
-import {ollamaModels,isOllama} from './ollama.ts';
+import {ollamaModels,ollamaReasoning,isOllama} from './ollama.ts';
 import {PARTICIPANTS,providerFor} from './participants.ts';
 import {workflowAssessment,responseValidation} from './discussion-workflow.ts';
 import {createServer} from 'node:http';
@@ -17,6 +17,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {Engine} from './engine.ts';
 import {createAdapters} from './adapters.ts';
+import {REASONING_LEVELS} from './reasoning.ts';
 import {enabledProviders,assertProvidersEnabled} from './provider-config.ts';
 import {usageSummary} from './provider-runtime.ts';
 import {boundedInt,makeReport,originalMarkdown,PROVIDER_LABELS} from './core.ts';
@@ -27,12 +28,12 @@ const host='127.0.0.1';
 const mode=options.mode || process.env.MODE || 'mock';
 if(!['mock','real'].includes(mode))throw new Error('MODE must be mock or real');
 const initial:Selection=options.defaults ?? {providers: defaultParticipants(), models: modelDefaults()};
-const defaults=Object.freeze({providers:Object.freeze([...initial.providers]),models:Object.freeze({...initial.models})});
+const defaults=Object.freeze({providers:Object.freeze([...initial.providers]),models:Object.freeze({...initial.models}),...(initial.efforts?{efforts:Object.freeze({...initial.efforts})}:{})});
 const providers=[...resolveSelection(undefined,defaults,true).providers];
 assertProvidersEnabled(providers);
 const factory=options.adapterFactory ?? createAdapters;
 const outputDir=options.outputDir ?? resolve('runs');
-const engine=new Engine((session,stage)=>factory(mode,session.selection!.providers,session.selection!.models,stage?.effort,stage?.effort,!!stage),outputDir);
+const engine=new Engine((session,stage)=>factory(mode,session.selection!.providers,session.selection!.models,stage?.effort,stage?.effort,!!stage,session.selection!.efforts),outputDir);
 const saved=new SavedSessions(outputDir);
 const html=readFileSync(new URL('../public/index.html',import.meta.url));
 const script=readFileSync(new URL('../public/app.js',import.meta.url));
@@ -50,9 +51,17 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
     if(req.method==='GET'&&url.pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(script);}
     if(req.method==='GET'&&url.pathname==='/api/models'){
       const provider=url.searchParams.get('provider')||'';
+      const reasoningModel=url.searchParams.get('model');
       if(!['codex','claude','grok','ollama-local','ollama-cloud'].includes(provider)||!enabledProviders().includes(provider as import('./core.ts').AgentId))return json(res,400,{error:'Choose an enabled provider'});
+      if(reasoningModel!==null){
+        if(!isOllama(provider))return json(res,400,{error:'Model reasoning metadata is available here for Ollama only'});
+        if(!/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/.test(reasoningModel))return json(res,400,{error:'Choose a valid model ID'});
+        if(mode==='mock')return json(res,200,{provider,model:reasoningModel,values:['low','medium','high'],source:'mock',inferencePerformed:false});
+        try{return json(res,200,await ollamaReasoning(provider,reasoningModel,options.ollamaFetch));}
+        catch{return json(res,503,{error:'Reasoning metadata unavailable. Refresh choices before selecting a level. No inference was requested.'});}
+      }
       if(provider==='codex'||provider==='claude'){
-        if(mode==='mock')return json(res,200,{provider,models:[`mock-${provider}-a`,`mock-${provider}-b`],labels:{},total:2,truncated:false,omitted:0,source:'mock',availabilityVerified:false,inferencePerformed:false});
+        if(mode==='mock')return json(res,200,{provider,models:[`mock-${provider}-a`,`mock-${provider}-b`],labels:{},efforts:Object.fromEntries([`mock-${provider}-a`,`mock-${provider}-b`].map(model=>[model,REASONING_LEVELS[provider]])),total:2,truncated:false,omitted:0,source:'mock',availabilityVerified:false,inferencePerformed:false});
         try{return json(res,200,await (options.modelCatalog??providerModelCatalog)(provider));}
         catch{return json(res,503,{error:'Model catalog unavailable. Check the provider login, then Refresh models. No prompt was sent.'});}
       }
@@ -63,7 +72,7 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
       try{return json(res,200,await ollamaModels(provider,options.ollamaFetch));}
       catch{return json(res,503,{error:'Ollama model list unavailable. Start Ollama and register models, then refresh. No inference was requested.'});}
     }
-    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,research:researchAvailability(),...(enabledProviders().includes('ollama-cloud')?{ollamaCloudSetup:ollamaCloudSetup()}:{}),providerAccountTypes:['personal','enterprise'],workspaceVerified:false,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:true,group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
+    if(req.method==='GET'&&url.pathname==='/api/health')return json(res,200,{status:'ok',mode,reasoningLevels:REASONING_LEVELS,research:researchAvailability(),...(enabledProviders().includes('ollama-cloud')?{ollamaCloudSetup:ollamaCloudSetup()}:{}),providerAccountTypes:['personal','enterprise'],workspaceVerified:false,agents:providers,availableProviders:enabledProviders().map(id=>({id,label:PROVIDER_LABELS[id],defaultModel:defaults.models[id] || ''})),availableParticipants:PARTICIPANTS.filter(id=>enabledProviders().includes(providerFor(id))).map(id=>({id,provider:providerFor(id),modelDiscovery:true,group:isOllama(providerFor(id))?'ollama':undefined,requiresInstalledModel:providerFor(id)==='ollama-local',effortMode:isOllama(providerFor(id))?'model-default':'role',label:PROVIDER_LABELS[providerFor(id)]+(id===providerFor(id)?' · Participant 1':' · Participant 2'),defaultModel:defaults.models[id]||''})),authentication:mode==='real'?'subscription':'mock',inferenceEnabled:mode==='mock'||process.env.KOINOUS_ENABLE_INFERENCE==='1',maxRounds:3,maxCalls:providers.length*3,readOnly:true});
     if(req.method==='GET'&&url.pathname==='/api/sessions'){
       const query=historyQuery(url.searchParams);
       const found=saved.list();
@@ -78,7 +87,7 @@ const handler=async(req:IncomingMessage,res:ServerResponse)=>{
       const selection=resolveSelection(d.selection,defaults);
       assertProvidersEnabled(selection.providers);
       // Constructing adapters validates transport/configuration but starts no subprocesses.
-      factory(mode,selection.providers,selection.models);
+      factory(mode,selection.providers,selection.models,undefined,undefined,false,selection.efforts);
       if(mode==='real'&&process.env.KOINOUS_ENABLE_INFERENCE!=='1')throw Error('Live inference is disabled; set KOINOUS_ENABLE_INFERENCE=1 only for an authorized run');
       const s=engine.create(String(d.prompt || ''),boundedInt(d.maxRounds,3,1,3),selection,{context:d.context,grounding:d.grounding,budget:d.budget,research:d.research,workflowMode:d.workflowMode,author:d.author,checks:d.checks});
       json(res,201,{id:s.id,status:s.status,selection:s.selection});const running=engine.run(s);active.add(running);void running.then(()=>active.delete(running),()=>active.delete(running));return;
